@@ -16,6 +16,36 @@ ever comes from a company outside that list.
 | Billing | Your own Vercel AI Gateway key — free while within your free credits |
 
 
+## Screens
+
+| Chat | Agent |
+|---|---|
+| ![Chat with an attached PDF](docs/img/chat.png) | ![Agent asking before it deletes a file](docs/img/agent.png) |
+
+*Sample content only. The agent asks before it deletes, and shows what it is about to do.*
+
+## How it works
+
+```mermaid
+flowchart LR
+    You([You]) --> App
+
+    subgraph Device["Your PC or phone — trusted"]
+      App["DeepSeek Agent<br/>enforces: folder limits, approvals,<br/>provider allowlist, cost caps"]
+      Local[("Stays on the device:<br/>API key, chat history,<br/>OCR, file parsing")]
+      Tools["Tools the assistant may use:<br/>chosen folder · its own browser window ·<br/>chosen windows / apps"]
+      App --- Local
+      App -->|"tool calls, only within the limits"| Tools
+    end
+
+    App -->|"HTTPS: your key, messages,<br/>text of files / pages / screens it read"| Gateway["Vercel AI Gateway"]
+    Gateway -->|"providerOptions.gateway.only"| Providers["Approved US providers<br/>Together · Fireworks · Baseten ·<br/>DeepInfra · Relace"]
+    Gateway -.->|"never"| China["Providers in China<br/>(Alibaba Cloud, DeepSeek)"]
+```
+
+The model is treated as untrusted: every limit (folder, mode, target window or app, provider, cost) is enforced by the
+app's code, and risky actions need your approval. Details and what is *not* covered: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
 ## Why the routing matters
 
 Without an allowlist, the gateway is free to pick any host for the model. In our own test the
@@ -49,6 +79,9 @@ This app sends `providerOptions.gateway.only` with every request, so:
 | Novita AI | Does not guarantee that prompts are kept out of training |
 | GMI Cloud, Inference.net, RunInfra, Pareto | No zero-data-retention guarantee |
 | Morph, Parasail, Particle, Wafer | Headquarters not verified |
+
+Zero data retention and no-training are the flags Vercel reports for each provider (checked 2026-10-22); they are not
+independently audited. How to re-check them, and why each refused provider is refused: [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 To change the list, edit [`providers.mjs`](providers.mjs) (Windows) and
 [`Providers.java`](android/app/src/main/java/com/deepseek/chat/Providers.java) (Android), then rebuild.
@@ -155,6 +188,23 @@ What it cannot do (yet): operate apps that do not expose their controls, click b
 
 Agent mode sends the contents of the files it reads to the approved providers, just like the chat does with an attached file. Choose the folder with that in mind.
 
+### What the Android accessibility service sees, and why
+
+The "Phone apps" mode needs Android's accessibility service. It is the only way for an app to read another app's controls
+and press them, so it is a powerful permission and you should know exactly what it does here:
+
+- **What it can read:** the on-screen text and controls of the apps **you chose in the chat** (up to 5), and, while one of
+  them is in front, a screenshot of the screen. Nothing is read while another app is in front.
+- **Why:** so the assistant can find a button and tap it, or put text into a field, on your behalf.
+- **What it cannot do:** act in an app you did not choose (this app included), tap by screen position, or work without you
+  switching it on in Android Settings. Android shows its own warning when you do.
+- **Where it goes:** what the assistant reads is sent to the approved AI providers through Vercel — the same as everything else
+  it looks at. The service itself stores and transmits nothing.
+- **Sideloading:** on Android 13 and later, an app installed from a file instead of an app store may first need **"Allow
+  restricted settings"** in its App info page before the service can be switched on; Android 15 widened these restrictions
+  to more permissions. This is Android's protection against abuse of the accessibility API. If you only want files, use the
+  folder modes, which do not need this permission.
+
 ## Supported files
 
 | Type | Extensions |
@@ -177,11 +227,14 @@ The app never runs, opens or saves the files you load — it only reads their te
 - (Windows) listens on `127.0.0.1` only and rejects requests from other websites;
 - (Android) opens external links in the system browser, never inside the app.
 
+Reporting a vulnerability, the threat model and the known limitations (including that prompt injection is mitigated, not
+solved) are in [SECURITY.md](SECURITY.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
 ## App size
 
 | | Size |
 |---|---|
-| Windows: after `npm install` | about 60 MB (plus Node.js, about 100 MB, if not installed yet) |
+| Windows: after `npm install` | about 40 MB (plus Node.js, about 100 MB, if not installed yet) |
 | Android: APK | about 47 MB for all CPU types, about 18 MB with `-Parm64Only` (most of it is the on-device text-recognition model) |
 
 ## Privacy
@@ -190,6 +243,35 @@ The app never runs, opens or saves the files you load — it only reads their te
 - Your messages and the text of attached files go to Vercel, which forwards them to one of the approved providers above.
 - OCR runs locally; images themselves are not uploaded.
 - Conversation history is stored only on your device.
+
+## Tests
+
+```bash
+npm install
+npm test
+```
+
+14 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
+is fooled: folder escapes (`..`, absolute paths, junctions), per-mode tool sets, approvals for deletes / secrets / risky commands
+even with auto-approve, the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB
+"zip bomb"). The tests were also run against a copy with safeguards deliberately broken, and they failed as they should.
+Manual runs with a real model are listed with their results and cost in [docs/TESTING.md](docs/TESTING.md).
+
+## Documentation
+
+| | |
+|---|---|
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability, scope, known limitations |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Assets, trust boundaries, controls against the OWASP LLM risks, residual risk |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md) | What is claimed about each provider, how it was checked, how to re-check |
+| [docs/TESTING.md](docs/TESTING.md) | Automated tests and the manual end-to-end runs |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Components, licences and services this project builds on |
+
+## License
+
+No licence has been chosen yet. Until one is added, all rights are reserved: you may read and run the code, but may not
+redistribute or modify it without the author's permission. (Third-party components keep their own licences — see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).)
 
 ## Acknowledgements
 

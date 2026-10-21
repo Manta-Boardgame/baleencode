@@ -19,6 +19,7 @@
       --accent:#5b9bf0; --accent-soft:#1d2a3d; --user:#2a303a; --bar:#3c424b; --ok:#4cc08a; --warn:#ff6b61; }
   }
   *{box-sizing:border-box}
+  [hidden]{display:none!important}   /* rows that set display:flex must still disappear when hidden */
   body{margin:0;background:var(--bg);color:var(--ink);
     font:15px/1.65 system-ui,"Segoe UI","Yu Gothic UI","Hiragino Sans",sans-serif;
     height:100vh;display:flex;flex-direction:column}

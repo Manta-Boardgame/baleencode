@@ -62,8 +62,8 @@ public class DeviceControlService extends AccessibilityService {
                 if (r != null && r.getPackageName() != null && pkg.equals(r.getPackageName().toString())) return r;
             }
         }
-        String front = active != null && active.getPackageName() != null ? active.getPackageName().toString() : "none";
-        throw new Exception("The chosen app is not on screen (the app in front is \"" + front + "\"). Use device_open_app to bring it forward.");
+        // Do not say which other app is in front: that is not the assistant's business
+        throw new Exception("The chosen app is not on screen. Use device_open_app to bring it forward.");
     }
 
     private static String simpleClass(AccessibilityNodeInfo n) {
