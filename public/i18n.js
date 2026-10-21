@@ -100,7 +100,8 @@
     if (!b) return;
     const others = Object.keys(packs);
     b.hidden = others.length === 0;
-    b.textContent = lang === 'en' ? (packs.ja ? '日本語' : '') : 'English';
+    const other = others[0];
+    b.textContent = lang === 'en' ? (packs[other] ? packs[other].name || other : '') : 'English';   // a pack names its own language
     b.onclick = () => api.setLang(lang === 'en' ? Object.keys(packs)[0] : 'en');
   }
 
@@ -110,7 +111,7 @@
     register(code, pack) {
       const exact = {};
       for (const k of Object.keys(pack.exact || {})) exact[k.trim()] = pack.exact[k];     // lookups use trimmed text
-      packs[code] = { exact, rules: pack.rules || [] }; if (document.body) { langButton(); start(); } },
+      packs[code] = { exact, rules: pack.rules || [], name: pack.name }; if (document.body) { langButton(); start(); } },
     setLang(code) {
       lang = code;
       try { localStorage.setItem('ds-lang', code); } catch {}
