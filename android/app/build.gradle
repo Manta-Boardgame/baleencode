@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.deepseek.chat'
+    compileSdk 36
+
+    defaultConfig {
+        // Must differ from the official DeepSeek app (com.deepseek.chat), otherwise Android treats this as an update of that app and refuses it
+        applicationId "app.gatewaychat.deepseek"
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+        // `-Parm64Only` builds a smaller APK for current phones (the native OCR libraries are shipped for one CPU type only)
+        if (project.hasProperty('arm64Only')) {
+            ndk { abiFilters 'arm64-v8a' }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug key for easy sideloading. Use your own key for store releases.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // On-device text recognition (OCR) for images and scanned PDFs
+    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'
+    // Serve assets over https so ES modules (pdf.js) can be loaded
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
+// The page and pdf.js are copied into src/main/assets by `npm install` (scripts/copy-vendor.mjs)
+preBuild.doFirst {
+    if (!file('src/main/assets/index.html').exists() || !file('src/main/assets/vendor/pdf.min.mjs').exists()) {
+        throw new GradleException('Assets are missing. Run `npm install` in the repository root first.')
+    }
+}

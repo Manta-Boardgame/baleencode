@@ -1,0 +1,28 @@
+# Dependencies and generated files
+node_modules/
+public/vendor/
+android/app/src/main/assets/
+
+# Local data (never commit)
+.env
+usage-ledger.json
+runtime/
+
+# Android build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local test files
+public/_test/

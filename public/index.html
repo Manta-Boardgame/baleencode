@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Default language of the interface (a language pack for it must be loaded; see README) -->
+<meta name="app-lang" content="en">
+<!-- Security: only this app's own files may run or be contacted; nothing is loaded from other sites -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<title>DeepSeek Agent</title>
+<link rel="icon" href="icon.png">
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --ink:#1b1d21; --muted:#676c75; --line:#e1e4e9;
+    --accent:#2f6fd0; --accent-soft:#e3edfb; --user:#e8eef7; --bar:#d6dae0; --ok:#1d7a4c; --warn:#b3261e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#17191c; --panel:#212429; --ink:#e9ebee; --muted:#9aa0a9; --line:#333840;
+      --accent:#5b9bf0; --accent-soft:#1d2a3d; --user:#2a303a; --bar:#3c424b; --ok:#4cc08a; --warn:#ff6b61; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.65 system-ui,"Segoe UI","Yu Gothic UI","Hiragino Sans",sans-serif;
+    height:100vh;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:17px;margin:0;font-weight:700}
+  header h1 span{color:var(--accent)}
+  .usage{font-size:12.5px;color:var(--muted);text-align:right}
+  .usage .meter{height:5px;width:150px;background:var(--bar);border-radius:3px;margin-top:4px;overflow:hidden;margin-left:auto}
+  .usage .meter i{display:block;height:100%;background:var(--accent);width:0}
+  button.link{background:none;border:none;color:var(--muted);cursor:pointer;font:inherit;font-size:12.5px;text-decoration:underline}
+  .shield{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ok);
+    border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin-left:8px;text-decoration:none;cursor:pointer;background:none}
+  main{flex:1;overflow-y:auto;padding:22px 16px}
+  .log{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+  .msg{max-width:88%;white-space:pre-wrap;word-wrap:break-word}
+  .msg.user{align-self:flex-end;background:var(--user);border-radius:14px 14px 4px 14px;padding:10px 14px}
+  .msg.bot{align-self:flex-start;display:flex;gap:10px;max-width:92%}
+  .avatar{flex:none;width:28px;height:28px;border-radius:7px;background:var(--accent);color:#fff;
+    display:grid;place-items:center;font-weight:700;font-size:12px}
+  .bubble{background:var(--panel);border:1px solid var(--line);border-radius:4px 14px 14px 14px;padding:10px 14px;min-width:120px}
+  .bubble .text{white-space:pre-wrap;word-wrap:break-word}
+  .bubble .think{color:var(--muted);font-size:13.5px;border-left:2px solid var(--line);padding-left:10px;margin-bottom:8px;white-space:pre-wrap}
+  .meta{font-size:11.5px;color:var(--muted);margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .served{color:var(--ok)}
+  .served.bad{color:var(--warn);font-weight:700}
+  .error{color:var(--warn)}
+  .cursor::after{content:'▍';animation:blink 1s steps(2) infinite;color:var(--muted)}
+  @keyframes blink{50%{opacity:0}}
+  .empty{max-width:820px;margin:6vh auto;color:var(--muted);text-align:center}
+  .empty h2{color:var(--ink);font-size:19px;margin:0 0 6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:4px 8px;font-size:12.5px;margin-bottom:6px;max-width:100%}
+  footer{border-top:1px solid var(--line);background:var(--panel);padding:10px 16px}
+  .composer{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+  textarea,input[type=text],input[type=password]{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    background:var(--bg);color:var(--ink);font:inherit;resize:vertical}
+  textarea:focus,input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .filebtn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;
+    padding:7px 12px;cursor:pointer;font-size:13.5px;white-space:nowrap}
+  .filebtn:hover{border-color:var(--accent)}
+  .fileinfo{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);min-width:0}
+  .fileinfo b{color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fileinfo button{border:none;background:none;color:var(--muted);cursor:pointer;font:inherit;padding:0 4px}
+  select{border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:var(--panel);color:var(--ink);font:inherit;font-size:13.5px}
+  #send,#stop,#agSend,#agStop{margin-left:auto;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 22px;
+    font:inherit;font-weight:700;cursor:pointer}
+  #stop,#agStop{background:var(--warn)}
+  #send:disabled,#agSend:disabled{opacity:.5;cursor:default}
+  .hint{font-size:11.5px;color:var(--muted)}
+  section.panel{flex:1;overflow-y:auto;padding:22px 16px}
+  .box{max-width:660px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  .box h2{font-size:17px;margin:0 0 8px}
+  .box ol{padding-left:1.3em;margin:10px 0}
+  .box a{color:var(--accent)}
+  .box table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+  .box th,.box td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  .box th{color:var(--muted);font-weight:600}
+  .yes{color:var(--ok);font-weight:700}
+  .no{color:var(--warn);font-weight:700}
+  #keySave{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 20px;font:inherit;font-weight:700;cursor:pointer}
+  /* ---- agent mode ---- */
+  .tabs{display:inline-flex;gap:2px;margin-left:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:2px;vertical-align:middle}
+  .tabs button{border:none;background:none;color:var(--muted);font:inherit;font-size:13px;padding:3px 12px;border-radius:7px;cursor:pointer}
+  .tabs button.on{background:var(--accent);color:#fff;font-weight:700}
+  #agentView{flex:1;min-height:0;display:flex;flex-direction:column}
+  #agentView[hidden]{display:none}
+  .agbar{border-bottom:1px solid var(--line);background:var(--panel);padding:10px 16px}
+  .agbar .inner{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+  .agbar input[type=text]{flex:1;min-width:180px;padding:7px 10px;font-size:13.5px}
+  .modehelp{font-size:12.5px;color:var(--muted)}
+  .modehelp.danger{color:var(--warn)}
+  #agLog{flex:1;overflow-y:auto;padding:18px 16px}
+  .tool{align-self:flex-start;max-width:92%;font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding:2px 0 2px 10px}
+  .tool.err{border-left-color:var(--warn)}
+  .tool summary{cursor:pointer;word-break:break-all}
+  .tool pre{margin:6px 0 0;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px;
+    background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}
+  .approval{align-self:flex-start;max-width:92%;border:2px solid var(--accent);border-radius:12px;background:var(--panel);padding:12px 14px}
+  .approval.hard{border-color:var(--warn)}
+  .approval h4{margin:0 0 6px;font-size:14px;word-break:break-all}
+  .approval pre{margin:6px 0 10px;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12.5px;
+    background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}
+  .approval .btns{display:flex;gap:8px;align-items:center}
+  .approval button{border:none;border-radius:9px;padding:7px 18px;font:inherit;font-weight:700;cursor:pointer}
+  .approval .allow{background:var(--ok);color:#fff}
+  .approval .deny{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+  .approval .why{font-size:12px;color:var(--warn)}
+  .note{align-self:center;font-size:12.5px;color:var(--muted);text-align:center}
+  .note.bad{color:var(--warn)}
+  .shot{align-self:flex-start;max-width:min(100%,560px);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .shot img{display:block;width:100%}
+  #agBudget{vertical-align:middle;width:130px}
+  @media (max-width: 600px){
+    header{padding:9px 12px} header h1{font-size:16px}
+    .usage .meter{width:100px} .usage{font-size:11.5px}
+    main{padding:14px 10px} .msg{max-width:96%} .msg.bot{max-width:100%}
+    footer{padding:9px 10px calc(9px + env(safe-area-inset-bottom))}
+    #send,#stop,#agSend,#agStop{margin-left:0;width:100%}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>DeepSeek</span> Agent
+    <span class="tabs"><button id="tabChat" class="on">Chat</button><button id="tabAgent">Agent</button></span>
+    <button class="link" id="newChat" title="Start a new conversation">New chat</button>
+    <button class="link" id="keyBtn" title="Set your API key">API key</button>
+    <button class="link" id="langBtn" hidden></button>
+  </h1>
+  <div class="usage">
+    <div id="usageText">Checking usage…</div>
+    <div class="meter"><i id="usageBar"></i></div>
+  </div>
+</header>
+
+<section class="panel" id="setup" hidden>
+  <div class="box">
+    <h2>Set your API key</h2>
+    <p>This app runs on your own Vercel AI Gateway key. Usage is billed to your own Vercel account (free while within the free credits).</p>
+    <ol>
+      <li>Create an account at <a href="https://vercel.com/signup" target="_blank" rel="noopener">vercel.com</a>.</li>
+      <li>Go to AI Gateway → API Keys → Create Key (the key is shown only once).</li>
+      <li>Free credits require adding a card. Adding a card alone does not charge you.</li>
+      <li>We recommend setting a spending limit under AI Gateway → Budgets (e.g. $5).</li>
+    </ol>
+    <input type="password" id="keyInput" placeholder="Paste your key (starts with vck_)" autocomplete="off">
+    <div class="line">
+      <button id="keySave">Save</button>
+      <button class="link" id="keyCancel" hidden>Close</button>
+      <span class="hint" id="keyMsg"></span>
+    </div>
+    <p class="hint">Your key is stored only on this device and is sent only to Vercel.</p>
+  </div>
+</section>
+
+<section id="agentView" hidden>
+  <div class="agbar"><div class="inner">
+    <div class="line">
+      <select id="agMode" title="What the assistant is allowed to touch">
+        <option value="read">Read-only · one folder</option>
+        <option value="folder">Read &amp; write · one folder</option>
+        <option value="full">Full access · whole PC</option>
+        <option value="browser">Browser · reads the page as text</option>
+        <option value="screen">Browser · looks at screenshots</option>
+        <option value="desktop">Desktop apps · chosen windows (Windows)</option>
+        <option value="device">Phone apps · chosen apps (Android)</option>
+      </select>
+      <button class="filebtn" id="agPick">Choose folder…</button>
+      <input type="text" id="agRoot" placeholder="Folder path (or use Choose folder)" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="line">
+      <label class="hint" id="agAutoLabel"><input type="checkbox" id="agAuto"> Auto-approve actions (not recommended)</label>
+      <label class="hint" title="The assistant stops when one request has cost this much">Max cost per request
+        <input type="range" id="agBudget" min="0.1" max="5" step="0.1" value="0.3"> <b id="agBudgetVal">$0.30</b></label>
+      <button class="link" id="agNew">New session</button>
+    </div>
+    <div class="line" id="agDeviceRow" hidden>
+      <select id="agApp" multiple title="Choose up to 5 apps"></select>
+      <span class="hint" id="agAppChips"></span>
+      <button class="filebtn" id="agA11y">Accessibility settings</button>
+      <span class="hint" id="agA11yState"></span>
+    </div>
+    <div class="modehelp" id="agHelp"></div>
+  </div></div>
+  <div id="agLog"><div class="log" id="agItems"></div></div>
+  <footer>
+    <div class="composer">
+      <div class="line">
+        <label class="filebtn">Attach file<input type="file" id="agFile" accept=".txt,.md,.csv,.tsv,.json,.log,.xml,.html,.htm,.srt,.vtt,.py,.js,.css,.pdf,.docx,.png,.jpg,.jpeg,.bmp,.tif,.tiff,.webp,text/*,application/pdf,image/*" hidden></label>
+        <span class="fileinfo" id="agFileInfo"></span>
+      </div>
+      <textarea id="agPrompt" rows="3" placeholder="What should the assistant do? (Enter to send, Shift+Enter for a new line)"></textarea>
+      <div class="line">
+        <span class="hint" id="agAttachHint"></span>
+        <span class="hint" id="agCost"></span>
+        <button id="agSend">Send</button>
+        <button id="agStop" hidden>Stop</button>
+      </div>
+    </div>
+  </footer>
+</section>
+
+<main id="scroller">
+  <div class="log" id="log"></div>
+</main>
+
+<footer>
+  <div class="composer">
+    <div class="line">
+      <label class="filebtn">Attach file<input type="file" id="file" accept=".txt,.md,.csv,.tsv,.json,.log,.xml,.html,.htm,.srt,.vtt,.py,.js,.css,.pdf,.docx,.png,.jpg,.jpeg,.bmp,.tif,.tiff,.webp,text/*,application/pdf,image/*" hidden></label>
+      <span class="fileinfo" id="fileInfo"></span>
+      <select id="effort" title="How much the model thinks before answering">
+        <option value="none">Thinking: off (fastest)</option>
+        <option value="low">Thinking: low</option>
+        <option value="high">Thinking: high</option>
+      </select>
+    </div>
+    <textarea id="prompt" rows="3" placeholder="Type a message… (Enter to send, Shift+Enter for a new line)"></textarea>
+    <div class="line">
+      <span class="hint" id="attachHint"></span>
+      <button id="send">Send</button>
+      <button id="stop" hidden>Stop</button>
+    </div>
+  </div>
+</footer>
+
+<script src="i18n.js"></script>
+<script src="agent-android.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const IS_APP = !!window.DSBridge;
+const KEY_STORE = 'ds-api-key';
+const HISTORY_KEY = 'ds-chat-history';
+const LEDGER_KEY = 'ds-ledger';
+const GATEWAY = 'https://ai-gateway.vercel.sh';
+
+function getKey(){ try { return localStorage.getItem(KEY_STORE) || ''; } catch { return ''; } }
+function setKey(v){ try { localStorage.setItem(KEY_STORE, v); } catch {} }
+
+// ---- Native bridge (Android). The desktop version talks to its local server instead. ----
+const bridgePending = {}; let bridgeSeq = 0;
+window.__dsDone = (id, status, text) => { const f = bridgePending[id]; delete bridgePending[id]; if (f) f({ status, text }); };
+window.__dsChunk = (id, text) => { const h = bridgePending[id]; if (h && h.onChunk) h.onChunk(text); };
+window.__dsEnd = (id, status, text) => { const h = bridgePending[id]; delete bridgePending[id]; if (h) h.onEnd({ status, text }); };
+
+function bridgeRequest(method, path, body){
+  return new Promise(resolve => {
+    const id = ++bridgeSeq; bridgePending[id] = resolve;
+    window.DSBridge.request(id, method, GATEWAY + path, body || '', getKey());
+  });
+}
+
+function appLedger(add){
+  let l = { calls: 0, chargedUsd: 0, inputTokens: 0, outputTokens: 0 };
+  try {
+    l = { ...l, ...JSON.parse(localStorage.getItem(LEDGER_KEY) || '{}') };
+    if (add) {
+      l.calls += 1; l.chargedUsd += add.cost || 0;
+      l.inputTokens += add.inputTokens || 0; l.outputTokens += add.outputTokens || 0;
+      localStorage.setItem(LEDGER_KEY, JSON.stringify(l));
+    }
+  } catch {}
+  return l;
+}
+
+async function appCredits(){
+  const r = await bridgeRequest('GET', '/v1/credits');
+  if (r.status !== 200) return null;
+  const j = JSON.parse(r.text); return { balance: Number(j.balance), used: Number(j.total_used) };
+}
+
+// ---- Provider allowlist (shown to the user; enforced by the server / native side) ----
+let routing = { model: '', allowed: [], blocked: [] };
+async function loadRouting(){
+  if (IS_APP) {
+    const r = await new Promise(resolve => { const id = ++bridgeSeq; bridgePending[id] = resolve; window.DSBridge.providers(id); });
+    routing = JSON.parse(r.text);
+  } else {
+    routing = await (await fetch('/api/providers')).json();
+  }
+}
+const allowedSlugs = () => routing.allowed.map(p => p.slug);
+
+// ---- Chat API ----
+const api = {
+  async usage(){
+    if (!IS_APP) return (await fetch('/api/usage', { headers: { 'x-api-key': getKey() } })).json();
+    return { ...appLedger(), credits: await appCredits() };
+  },
+
+  /** Stream a reply. onChunk receives text deltas; returns { ok, error, provider, cost, usage } */
+  async chat({ messages, effort, onChunk, onThink, signal }){
+    const parse = makeStreamParser(onChunk, onThink);
+
+    if (IS_APP) {
+      if (!getKey()) return { ok: false, error: 'No API key set. Use "API key" at the top right to set one.' };
+      return new Promise(resolve => {
+        const id = ++bridgeSeq;
+        bridgePending[id] = {
+          onChunk: (raw) => parse.push(raw),
+          onEnd: ({ status, text }) => {
+            if (status !== 200) return resolve({ ok: false, error: friendlyError(text) });
+            resolve({ ok: true, ...parse.result() });
+          },
+        };
+        if (signal) signal.addEventListener('abort', () => window.DSBridge.cancel(id));
+        window.DSBridge.chat(id, JSON.stringify({ messages, effort }), getKey());
+      });
+    }
+
+    const r = await fetch('/api/chat', { method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getKey() },
+      body: JSON.stringify({ messages, effort }) });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); return { ok: false, error: friendlyError(j.error) }; }
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parse.push(dec.decode(value, { stream: true }));
+    }
+    return { ok: true, ...parse.result() };
+  },
+};
+
+function friendlyError(text){
+  const t = String(text ?? 'Request failed.');
+  if (/only.*filter|allowed providers/i.test(t)) {
+    return 'Stopped: none of the approved providers can serve this request right now. '
+      + 'Nothing was sent to a provider outside the approved list.';
+  }
+  if (/402|credit/i.test(t)) return 'Stopped: no free credits left (you will not be charged).';
+  if (/quota_for_entity_exceeded|budget/i.test(t)) return 'Stopped: your Vercel budget limit was reached (you will not be charged).';
+  return t;
+}
+
+/** Parse the server-sent events of a chat completion stream */
+function makeStreamParser(onChunk, onThink){
+  let buf = '', text = '', provider = null, cost = 0, marketCost = 0, usage = null;
+  const handleLine = (line) => {
+    if (!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') return;
+    let j; try { j = JSON.parse(payload); } catch { return; }
+    const delta = j.choices?.[0]?.delta ?? {};
+    if (typeof delta.content === 'string' && delta.content) { text += delta.content; onChunk?.(delta.content); }
+    if (typeof delta.reasoning === 'string' && delta.reasoning) onThink?.(delta.reasoning);
+    const gw = (delta.provider_metadata ?? j.provider_metadata)?.gateway;
+    if (gw) {
+      provider = gw.routing?.finalProvider ?? gw.routing?.resolvedProvider ?? provider;
+      if (gw.cost !== undefined) cost = Number(gw.cost);
+      if (gw.marketCost !== undefined) marketCost = Number(gw.marketCost);
+    }
+    if (j.usage) usage = { inputTokens: j.usage.prompt_tokens ?? 0, outputTokens: j.usage.completion_tokens ?? 0 };
+  };
+  return {
+    push(raw){
+      buf += raw;
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const l of lines) handleLine(l.trim());
+    },
+    result(){ handleLine(buf.trim()); return { text, provider, cost, marketCost, usage }; },
+  };
+}
+
+// =================== file loading (same safeguards as the desktop app) ===================
+const FILE_LIMIT = 400000;
+const MAX_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_DOCX_XML_BYTES = 50 * 1024 * 1024;
+const MAX_PDF_PAGES = 1000;
+const TEXT_EXT = ['txt', 'md', 'csv', 'tsv', 'json', 'log', 'xml', 'html', 'htm', 'srt', 'vtt', 'py', 'js', 'css'];
+const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'bmp', 'tif', 'tiff', 'webp'];
+let loadedFile = null;
+
+function decodeText(buf){
+  const utf8 = new TextDecoder('utf-8').decode(buf);
+  if (!utf8.includes('�')) return utf8;
+  try {
+    const sjis = new TextDecoder('shift_jis').decode(buf);
+    if (!sjis.includes('�')) return sjis;
+  } catch {}
+  return utf8;
+}
+
+async function ocrBlob(blob, ext){
+  if (IS_APP) {
+    const b64 = await blobToBase64(blob);
+    const r = await new Promise(resolve => { const id = ++bridgeSeq; bridgePending[id] = resolve; window.DSBridge.ocr(id, b64); });
+    if (r.status !== 200) throw new Error(r.text || 'Could not read text from the image.');
+    return r.text;
+  }
+  const r = await fetch('/api/ocr', { method: 'POST', headers: { 'x-file-ext': ext || 'png' }, body: blob });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error);
+  return j.text;
+}
+
+function blobToBase64(blob){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+function tidyOcr(text){
+  return text.replace(/([^\x00-\x7F])[ \t]+(?=[^\x00-\x7F])/g, '$1')
+    .replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+let pdfjsLib = null;
+async function readPdf(buf, onProgress){
+  if (!pdfjsLib) {
+    pdfjsLib = await import('./vendor/pdf.min.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', location.href).href;
+  }
+  const base = new URL('./vendor/', location.href).href;
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf),
+    cMapUrl: base + 'cmaps/', cMapPacked: true, standardFontDataUrl: base + 'standard_fonts/',
+    isEvalSupported: false, enableXfa: false }).promise;
+  if (doc.numPages > MAX_PDF_PAGES) throw new Error(`PDFs with more than ${MAX_PDF_PAGES} pages are not supported.`);
+  const pages = [];
+  let emptyPages = 0;
+  for (let i = 1; i <= doc.numPages; i++) {
+    onProgress?.(`Reading PDF… page ${i}/${doc.numPages}`);
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    let line = '', out = [], lastY = null;
+    for (const it of content.items) {
+      if (typeof it.str !== 'string') continue;
+      const y = it.transform ? Math.round(it.transform[5]) : null;
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) { out.push(line); line = ''; }
+      line += it.str;
+      if (it.hasEOL) { out.push(line); line = ''; }
+      lastY = y;
+    }
+    if (line) out.push(line);
+    const pageText = out.join('\n');
+    if (pageText.replace(/\s/g, '').length < 30) emptyPages++;
+    pages.push(pageText);
+  }
+  return { text: restoreCircled(pages.join('\n\n')), numPages: doc.numPages, emptyPages };
+}
+
+async function ocrPdfFile(file, onProgress){
+  if (IS_APP) {
+    const b64 = await blobToBase64(file);
+    const prep = await new Promise(resolve => { const id = ++bridgeSeq; bridgePending[id] = resolve; window.DSBridge.pdfPrep(id, b64); });
+    if (prep.status !== 200) throw new Error(prep.text);
+    const pages = Number(prep.text);
+    const out = [];
+    for (let i = 1; i <= pages; i++) {
+      onProgress?.(`Reading as images… page ${i}/${pages}`);
+      const r = await new Promise(resolve => { const id = ++bridgeSeq; bridgePending[id] = resolve; window.DSBridge.pdfPage(id, i); });
+      if (r.status === 200) out.push(tidyOcr(r.text));
+    }
+    return { text: out.join('\n\n'), numPages: pages };
+  }
+  onProgress?.('Converting PDF pages to images…');
+  const prep = await fetch('/api/pdfprep', { method: 'POST', body: file });
+  const info = await prep.json();
+  if (!prep.ok) throw new Error(info.error);
+  const out = [];
+  for (let i = 1; i <= info.pages; i++) {
+    onProgress?.(`Reading as images… page ${i}/${info.pages}`);
+    const r = await fetch(`/api/pdfpage?id=${encodeURIComponent(info.id)}&page=${i}`);
+    const j = await r.json();
+    if (r.ok) out.push(tidyOcr(j.text));
+  }
+  return { text: out.join('\n\n'), numPages: info.pages };
+}
+
+// Some Japanese PDFs map circled numbers to ASCII when text is extracted; restore them
+const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
+const CIRCLED_ASCII = '!"#$%&\'()';
+function restoreCircled(text){
+  const japanese = (text.match(/[぀-ヿ一-鿿]/g) || []).length;
+  if (japanese < text.length * 0.3) return text;
+  const hits = [...CIRCLED_ASCII].filter(c => (text.split(c).length - 1) >= 2).length;
+  if (hits < 3) return text;
+  return text.replace(/["!#$%&'()]/g, c => CIRCLED[CIRCLED_ASCII.indexOf(c)] || c);
+}
+
+async function readDocx(buf){
+  const view = new DataView(buf);
+  const bytes = new Uint8Array(buf);
+  let end = -1;
+  for (let i = bytes.length - 22; i >= 0 && i > bytes.length - 66000; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { end = i; break; }
+  }
+  if (end < 0) throw new Error('This does not look like a Word file.');
+  let offset = view.getUint32(end + 16, true);
+  const count = view.getUint16(end + 10, true);
+  let entry = null;
+  for (let i = 0; i < count; i++) {
+    const nameLen = view.getUint16(offset + 28, true);
+    const extraLen = view.getUint16(offset + 30, true);
+    const commentLen = view.getUint16(offset + 32, true);
+    const name = new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + nameLen));
+    if (name === 'word/document.xml') {
+      entry = { method: view.getUint16(offset + 10, true), size: view.getUint32(offset + 20, true),
+                local: view.getUint32(offset + 42, true) };
+      break;
+    }
+    offset += 46 + nameLen + extraLen + commentLen;
+  }
+  if (!entry) throw new Error('Could not find the document body in the Word file.');
+  const nameLen = view.getUint16(entry.local + 26, true);
+  const extraLen = view.getUint16(entry.local + 28, true);
+  const start = entry.local + 30 + nameLen + extraLen;
+  if (entry.size > buf.byteLength || start + entry.size > buf.byteLength) throw new Error('The Word file is damaged.');
+  const raw = bytes.subarray(start, start + entry.size);
+  let xml;
+  if (entry.method === 0) {
+    xml = new TextDecoder().decode(raw);
+  } else {
+    const reader = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+    const parts = []; let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX_DOCX_XML_BYTES) { await reader.cancel(); throw new Error('The Word file expands to an unusually large size and was not loaded.'); }
+      parts.push(value);
+    }
+    xml = new TextDecoder().decode(await new Blob(parts).arrayBuffer());
+  }
+  return xml.replace(/<w:tab[^>]*\/>/g, '\t').replace(/<w:br[^>]*\/>/g, '\n').replace(/<\/w:p>/g, '\n')
+    .replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+// Two places can take a file: the Chat tab and the Agent tab. Each keeps its own attached file.
+let agLoadedFile = null;
+const FILE_UI = {
+  chat: { info: 'fileInfo', hint: 'attachHint', input: 'file' },
+  agent: { info: 'agFileInfo', hint: 'agAttachHint', input: 'agFile' },
+};
+const attachedOf = (which) => (which === 'agent' ? agLoadedFile : loadedFile);
+function setAttached(which, f){ if (which === 'agent') agLoadedFile = f; else loadedFile = f; }
+
+function showFileInfo(which = 'chat'){
+  const ui = FILE_UI[which];
+  const el = $(ui.info);
+  el.innerHTML = '';
+  const file = attachedOf(which);
+  if (!file) { $(ui.hint).textContent = ''; return; }
+  const name = document.createElement('b');
+  name.textContent = '📄 ' + file.name;
+  const size = document.createElement('span');
+  size.textContent = `(${file.chars.toLocaleString()} chars${file.truncated ? ', beginning only' : ''}${file.note ? ', ' + file.note : ''})`;
+  const remove = document.createElement('button');
+  remove.textContent = '×'; remove.title = 'Remove';
+  remove.onclick = () => { setAttached(which, null); $(ui.input).value = ''; showFileInfo(which); };
+  el.append(name, size, remove);
+  $(ui.hint).textContent = 'The file is sent with your next message.';
+}
+
+function setFileStatus(msg, which = 'chat'){
+  const el = $(FILE_UI[which].info);
+  el.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = msg;
+  el.append(span);
+}
+
+async function pickFile(e, which){
+  const f = e.target.files[0];
+  if (!f) return;
+  const status = (m) => setFileStatus(m, which);
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  let note = '';
+  try {
+    if (f.size > MAX_FILE_BYTES) throw new Error(`Files larger than ${MAX_FILE_BYTES / 1024 / 1024} MB are not supported.`);
+    if (![...TEXT_EXT, 'pdf', 'docx', 'doc', ...IMAGE_EXT].includes(ext)) {
+      throw new Error('This file type is not supported. Supported: ' + [...TEXT_EXT, 'pdf', 'docx', ...IMAGE_EXT].map(e => '.' + e).join(' '));
+    }
+    status('Reading…');
+    const buf = await f.arrayBuffer();
+    let text;
+    if (IMAGE_EXT.includes(ext)) {
+      status('Reading text from the image…');
+      text = tidyOcr(await ocrBlob(f, ext));
+    } else if (ext === 'pdf') {
+      let r = await readPdf(buf, status);
+      if (r.emptyPages > r.numPages / 2) {
+        r = await ocrPdfFile(f, status);
+        note = `${r.numPages} pages, read as images`;
+      } else {
+        note = `${r.numPages} pages`;
+      }
+      text = r.text;
+    } else if (ext === 'docx') {
+      text = await readDocx(buf);
+    } else if (ext === 'doc') {
+      throw new Error('Old Word files (.doc) are not supported. Please save it as .docx.');
+    } else {
+      text = decodeText(buf);
+    }
+    const truncated = text.length > FILE_LIMIT;
+    if (truncated) text = text.slice(0, FILE_LIMIT);
+    const file = text.trim() ? { name: f.name, text, chars: text.length, truncated, note } : null;
+    setAttached(which, file);
+    if (!file) alert(ext === 'pdf'
+      ? 'No text could be extracted from this PDF. It may be a scanned (image-only) PDF.'
+      : 'No text could be read from this file.');
+  } catch (err) {
+    setAttached(which, null);
+    alert('Could not load the file.' + (err && err.message ? '\n' + err.message : ''));
+  }
+  showFileInfo(which);
+}
+$('file').onchange = (e) => pickFile(e, 'chat');
+$('agFile').onchange = (e) => pickFile(e, 'agent');
+
+// =================== conversation ===================
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ESC_MAP[c]); }
+function costText(c){ return c ? '$' + c.toFixed(6) : '$0 (free)'; }
+
+let history = [];
+try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch {}
+function save(){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-60))); } catch {} }
+
+const log = $('log'), scroller = $('scroller');
+
+function providerLabel(item){
+  if (!item.provider) return '';
+  const known = routing.allowed.find(p => p.slug === item.provider);
+  return known ? '' : `<span class="served bad">Served by ${esc(item.provider)} — not on the approved list</span>`;
+}
+
+function renderItem(item){
+  const nodes = [];
+  if (item.role === 'user') {
+    const u = document.createElement('div');
+    u.className = 'msg user';
+    const chip = item.file ? `<div class="chip">📄 ${esc(item.file.name)} · ${item.file.chars.toLocaleString()} chars</div>` : '';
+    u.innerHTML = chip + `<div>${esc(item.content)}</div>`;
+    nodes.push(u);
+  } else {
+    const b = document.createElement('div');
+    b.className = 'msg bot';
+    const think = item.thinking ? `<div class="think">${esc(item.thinking)}</div>` : '';
+    const body = item.error
+      ? `<div class="error">${esc(item.error)}</div>`
+      : `${think}<div class="text">${esc(item.content)}</div>`
+        + (item.done ? `<div class="meta">${providerLabel(item)}<span>${(item.usage?.outputTokens ?? 0).toLocaleString()} tokens out</span><span>cost ${costText(item.cost)}</span></div>` : '');
+    b.innerHTML = `<div class="avatar">DS</div><div class="bubble">${body}</div>`;
+    nodes.push(b);
+  }
+  return nodes;
+}
+
+function renderAll(){
+  log.innerHTML = '';
+  if (!history.length) {
+    log.innerHTML = `<div class="empty"><h2>Ask DeepSeek anything</h2>
+      <div>Attach a document if you want questions answered about it.</div></div>`;
+    return;
+  }
+  history.forEach(h => log.append(...renderItem(h)));
+  scroller.scrollTop = scroller.scrollHeight;
+}
+
+function showUsage(u){
+  const c = u.credits;
+  const charged = u.chargedUsd || 0;
+  if (c) {
+    const total = c.balance + c.used;
+    $('usageText').textContent = `Charged ${costText(charged)} / free credits left $${c.balance.toFixed(4)}`;
+    $('usageBar').style.width = (total > 0 ? Math.min(100, c.used / total * 100) : 0) + '%';
+  } else {
+    $('usageText').textContent = `Charged ${costText(charged)}`;
+  }
+}
+
+let controller = null;
+
+async function send(){
+  if (controller) return;
+  const typed = $('prompt').value.trim();
+  if (!typed && !loadedFile) return;
+  if (!getKey()) { showSetup(true); return; }
+
+  const attached = loadedFile;
+  const content = attached
+    ? `[Attached file: ${attached.name}]\n${attached.text}\n\n${typed || 'Please summarise this file.'}`
+    : typed;
+
+  const userItem = { role: 'user', content: typed || t(`(Please summarise ${attached.name})`),
+    file: attached ? { name: attached.name, chars: attached.chars } : null, sent: content };
+  const botItem = { role: 'assistant', content: '', thinking: '', done: false };
+  history.push(userItem, botItem);
+  $('prompt').value = '';
+  loadedFile = null; $('file').value = ''; showFileInfo();
+  renderAll();
+
+  $('send').hidden = true; $('stop').hidden = false;
+  controller = new AbortController();
+
+  // Send the whole conversation so the model keeps context
+  const messages = history.filter(h => !h.error && (h.role === 'user' || h.content))
+    .map(h => ({ role: h.role, content: h.role === 'user' ? (h.sent ?? h.content) : h.content }))
+    .filter(m => m.content);
+
+  const bubble = () => log.lastElementChild?.querySelector('.bubble');
+  let textEl = null, thinkEl = null;
+  const ensureText = () => {
+    if (!textEl) { textEl = document.createElement('div'); textEl.className = 'text cursor'; bubble()?.append(textEl); }
+    return textEl;
+  };
+
+  const res = await api.chat({
+    messages, effort: $('effort').value, signal: controller.signal,
+    onChunk: (t) => { botItem.content += t; ensureText().textContent = botItem.content; scroller.scrollTop = scroller.scrollHeight; },
+    onThink: (t) => {
+      botItem.thinking += t;
+      if (!thinkEl) { thinkEl = document.createElement('div'); thinkEl.className = 'think'; bubble()?.prepend(thinkEl); }
+      thinkEl.textContent = botItem.thinking;
+      scroller.scrollTop = scroller.scrollHeight;
+    },
+  }).catch(e => ({ ok: false, error: e?.name === 'AbortError' ? 'Stopped.' : String(e?.message ?? e) }));
+
+  controller = null;
+  $('send').hidden = false; $('stop').hidden = true;
+
+  if (!res.ok) {
+    botItem.error = res.error;
+  } else {
+    botItem.content = res.text || botItem.content;
+    botItem.provider = res.provider;
+    botItem.cost = res.cost;
+    botItem.usage = res.usage;
+    if (IS_APP) appLedger({ cost: res.cost, inputTokens: res.usage?.inputTokens, outputTokens: res.usage?.outputTokens });
+  }
+  botItem.done = true;
+  save(); renderAll();
+  api.usage().then(showUsage).catch(() => {});
+}
+
+$('send').onclick = send;
+$('stop').onclick = () => { controller?.abort(); };
+$('prompt').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+});
+$('newChat').onclick = () => {
+  if (history.length && !confirm('Start a new conversation? (The current one is cleared.)')) return;
+  history = []; save(); renderAll();
+};
+
+// ---- panels ----
+let tab = 'chat';
+function applyView(panel){
+  $('setup').hidden = panel !== 'setup';
+  const free = !panel;
+  $('scroller').hidden = !(free && tab === 'chat');
+  document.querySelector('body > footer').hidden = !(free && tab === 'chat');
+  $('agentView').hidden = !(free && tab === 'agent');
+}
+function closePanels(){ applyView(null); }
+function openPanel(id){ applyView(id); }
+function showSetup(force){
+  const has = !!getKey();
+  if (has && !force) { closePanels(); return; }
+  openPanel('setup');
+  $('keyCancel').hidden = !has;
+  $('keyInput').value = '';
+  $('keyMsg').textContent = has ? 'A key is already set. Entering a new one will replace it.' : '';
+}
+$('keyBtn').onclick = () => showSetup(true);
+$('keyCancel').onclick = closePanels;
+$('keySave').onclick = async () => {
+  const v = $('keyInput').value.trim();
+  if (!v) { $('keyMsg').textContent = 'Please paste your key.'; return; }
+  setKey(v);
+  $('keyMsg').textContent = 'Saved. Checking…';
+  try {
+    const u = await api.usage();
+    if (u.credits) {
+      $('keyMsg').textContent = `Key verified ($${u.credits.balance.toFixed(4)} left)`;
+      showUsage(u);
+      setTimeout(closePanels, 800);
+    } else {
+      $('keyMsg').textContent = 'Could not check the balance with this key. Please make sure it is correct.';
+    }
+  } catch {
+    $('keyMsg').textContent = 'Could not verify. Check your connection and your key.';
+  }
+};
+
+// =================== agent mode ===================
+const AG_KEY = 'ds-agent-settings';
+const ag = { mode: 'folder', root: '', rootName: '', budget: 0.3, target: '', app: '', appName: '', apps: [] };
+try { Object.assign(ag, JSON.parse(localStorage.getItem(AG_KEY) || '{}')); } catch {}
+if (!['read', 'folder', 'full', 'browser', 'screen', 'desktop', 'device'].includes(ag.mode) || (IS_APP && !['read', 'folder', 'device'].includes(ag.mode)) || (!IS_APP && ag.mode === 'device')) ag.mode = 'folder';
+if (!(ag.budget >= 0.1 && ag.budget <= 5)) ag.budget = 0.3;
+if (!Array.isArray(ag.apps)) ag.apps = ag.app ? [{ pkg: ag.app, name: ag.appName }] : [];
+let agHistory = [];          // raw model messages (including tool calls), kept for context
+let agController = null;
+const agTools = {};          // tool-call id -> element
+
+const MODE_HELP = {
+  read: 'The assistant can look at and read files inside the chosen folder. It cannot change anything.',
+  folder: 'The assistant can read, create and edit files inside the chosen folder only. Deleting asks you first (files go to a recoverable trash folder). It cannot run commands.',
+  full: 'FULL ACCESS: the assistant can read any file you can, change files anywhere, and run PowerShell commands. Every change, delete and command asks you first. Keys, passwords and browser data always ask, even with auto-approve.',
+};
+
+MODE_HELP.browser = 'Opens its own Edge window (separate profile, none of your logins) and drives it. It reads the page as text, so it is cheap and exact. Every click, typing and page change asks first; purchases, deletes and password fields always ask.';
+MODE_HELP.screen = 'Same separate browser window, but the assistant looks at screenshots (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and clicks by pixel position. Screenshots of that browser window are sent to that provider. Every action asks first; purchases, deletes and password fields always ask.';
+MODE_HELP.desktop = 'Works only on the application windows whose titles you type below (up to 5, separated by commas, for example Calculator, Notepad). The assistant sees a window\'s controls as a list and presses buttons / fills text boxes through Windows accessibility, so it cannot touch other windows. Apps that do not expose their controls cannot be operated. Every action asks first; deletes, purchases and password fields always ask.';
+MODE_HELP.device = 'Works only on the apps you choose below (up to 5), through Android accessibility: it sees an app\'s controls as a list and taps / types in them. It cannot use any other app. You must turn the accessibility service on once in Settings (Android shows its own warning). Every action asks first, unless you turn on auto-approve; deletes, purchases and password fields always ask. While the assistant works in the other app, come back here to approve (or use split screen).';
+function agSave(){ try { localStorage.setItem(AG_KEY, JSON.stringify({ mode: ag.mode, root: ag.root, rootName: ag.rootName, budget: ag.budget, target: ag.target, apps: ag.apps })); } catch {} }
+
+function agRefreshBar(){
+  $('agMode').value = ag.mode;
+  const full = ag.mode === 'full';
+  const desk = ag.mode === 'desktop';
+  const dev = ag.mode === 'device';
+  $('agRoot').value = desk ? ag.target : IS_APP ? ag.rootName : ag.root;
+  $('agRoot').readOnly = IS_APP && !desk;
+  $('agRoot').placeholder = desk ? 'Part of a window title; several allowed, separated by commas (e.g. Calculator, Notepad)' : IS_APP ? 'No folder chosen' : full ? 'Start in (optional)' : 'Folder path (or use Choose folder)';
+  $('agMode').querySelector('option[value=full]').hidden = IS_APP;
+  $('agMode').querySelector('option[value=full]').disabled = IS_APP;
+  $('agHelp').textContent = MODE_HELP[ag.mode] + (IS_APP ? ' Android only lets the assistant see the one folder you choose.' : '');
+  $('agHelp').className = 'modehelp' + (full ? ' danger' : '');
+  const web = ag.mode === 'browser' || ag.mode === 'screen';
+  $('agPick').hidden = web || desk || dev; $('agRoot').hidden = web || dev;
+  { const o = $('agMode').querySelector('option[value=device]'); o.hidden = !IS_APP; o.disabled = !IS_APP; }
+  $('agDeviceRow').hidden = !dev;
+  if (dev) agDeviceRefresh();
+  for (const v of ['full', 'browser', 'screen', 'desktop']) { const o = $('agMode').querySelector('option[value=' + v + ']'); o.hidden = IS_APP; o.disabled = IS_APP; }
+  $('agAutoLabel').hidden = ag.mode === 'read';
+  $('agAutoLabel').lastChild.textContent = dev ? ' Auto-approve taps and typing (not recommended)'
+    : web || desk ? ' Auto-approve clicks, typing and page changes (not recommended)'
+    : full ? ' Auto-approve changes and commands (not recommended)'
+    : ' Auto-approve deletes (not recommended)';
+  $('agBudget').value = ag.budget; $('agBudgetVal').textContent = '$' + ag.budget.toFixed(2);
+}
+
+function agEl(cls, text){
+  const d = document.createElement('div');
+  d.className = cls;
+  if (text !== undefined) d.textContent = text;
+  $('agItems').append(d);
+  $('agLog').scrollTop = $('agLog').scrollHeight;
+  return d;
+}
+
+function agAddUser(text, file){
+  const d = agEl('msg user');
+  if (file) {
+    const chip = document.createElement('div'); chip.className = 'chip';
+    chip.textContent = '📄 ' + file.name + ' · ' + file.chars.toLocaleString() + ' chars';
+    d.append(chip);
+  }
+  const t = document.createElement('div'); t.textContent = text; d.append(t);
+}
+
+function agAddBot(text){
+  const b = document.createElement('div');
+  b.className = 'msg bot';
+  const av = document.createElement('div'); av.className = 'avatar'; av.textContent = 'DS';
+  const bub = document.createElement('div'); bub.className = 'bubble';
+  const t = document.createElement('div'); t.className = 'text'; t.textContent = text;
+  bub.append(t); b.append(av, bub);
+  $('agItems').append(b);
+  $('agLog').scrollTop = $('agLog').scrollHeight;
+}
+
+function agShowApproval(ev, answer){
+  const card = agEl('approval' + (ev.hard ? ' hard' : ''));
+  const h = document.createElement('h4'); h.textContent = (ev.hard ? '⚠ ' : '') + ev.title;
+  card.append(h);
+  if (ev.hard) {
+    const why = document.createElement('div'); why.className = 'why';
+    why.textContent = 'This touches sensitive data or is a risky command, so it always needs your OK.';
+    card.append(why);
+  }
+  if (ev.detail) { const pre = document.createElement('pre'); pre.textContent = ev.detail; card.append(pre); }
+  const btns = document.createElement('div'); btns.className = 'btns';
+  const allow = document.createElement('button'); allow.className = 'allow'; allow.textContent = 'Allow';
+  const deny = document.createElement('button'); deny.className = 'deny'; deny.textContent = 'Deny';
+  const state = document.createElement('span'); state.className = 'hint';
+  const decide = (ok) => {
+    allow.disabled = deny.disabled = true;
+    state.textContent = ok ? 'Allowed' : 'Denied';
+    answer(ok);
+  };
+  allow.onclick = () => decide(true);
+  deny.onclick = () => decide(false);
+  btns.append(allow, deny, state);
+  card.append(btns);
+  $('agLog').scrollTop = $('agLog').scrollHeight;
+  try { window.focus(); } catch {}
+}
+
+function agOnEvent(ev, approve){
+  switch (ev.type) {
+    case 'text': agAddBot(ev.text); break;
+    case 'image': {
+      const box = document.createElement('div'); box.className = 'shot';
+      const img = document.createElement('img'); img.alt = 'Screenshot the assistant is looking at';
+      img.src = 'data:' + ev.mime + ';base64,' + ev.b64;
+      box.append(img); $('agItems').append(box);
+      $('agLog').scrollTop = $('agLog').scrollHeight;
+      break;
+    }
+    case 'tool': {
+      let d = agTools[ev.id];
+      if (!d) {
+        d = document.createElement('details'); d.className = 'tool';
+        const s = document.createElement('summary'); d.append(s);
+        $('agItems').append(d); agTools[ev.id] = d;
+      }
+      d.firstChild.textContent = '🔧 ' + (ev.title || ev.name);
+      $('agLog').scrollTop = $('agLog').scrollHeight;
+      break;
+    }
+    case 'tool_result': {
+      const d = agTools[ev.id];
+      if (d) {
+        if (!ev.ok) d.classList.add('err');
+        const pre = document.createElement('pre'); pre.textContent = ev.preview || '(empty)';
+        d.append(pre);
+      }
+      break;
+    }
+    case 'approval':
+      agShowApproval(ev, (ok) => approve(ev.approvalId, ok));
+      break;
+    case 'wait': agEl('note', `${ev.reason} — waiting ${ev.seconds}s and trying again…`); break;
+    case 'usage':
+      $('agCost').textContent = `This request: $${ev.spent.toFixed(4)}`;
+      if (ev.provider && !allowedSlugs().includes(ev.provider)) agEl('note bad', `Served by "${ev.provider}", which is not on the approved list.`);
+      break;
+    case 'done':
+      agHistory = agHistory.concat(ev.messages || []);
+      if (ev.stopped) agEl('note bad', ev.stopped);
+      break;
+    case 'error': agEl('note bad', ev.error); break;
+  }
+}
+
+async function agRunWindows(body, onEvent, signal){
+  const r = await fetch('/api/agent', { method: 'POST', signal,
+    headers: { 'Content-Type': 'application/json', 'x-api-key': getKey() }, body: JSON.stringify(body) });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(friendlyError(j.error)); }
+  const approve = (approvalId, allow) => fetch('/api/agent/approve', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: approvalId, allow }) }).catch(() => {});
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const line = buf.slice(0, i); buf = buf.slice(i + 2);
+      if (!line.startsWith('data:')) continue;
+      try { onEvent(JSON.parse(line.slice(5)), approve); } catch {}
+    }
+  }
+}
+
+async function agSend(){
+  if (agController) return;
+  const typed = $('agPrompt').value.trim();
+  const attached = agLoadedFile;
+  if (!typed && !attached) return;
+  const text = attached ? `[Attached file: ${attached.name}]\n${attached.text}\n\n${typed || 'Please summarise this file.'}` : typed;
+  if (!getKey()) { showSetup(true); return; }
+  if (['read', 'folder'].includes(ag.mode) && !ag.root.trim()) { alert('Choose a folder first.'); return; }
+  if (ag.mode === 'device' && !ag.apps.length) { alert('Choose the app(s) the assistant may use first.'); return; }
+  if (ag.mode === 'desktop' && !ag.target.trim()) { alert('Type part of the title of each window the assistant may use, separated by commas (for example: Calculator, Notepad).'); return; }
+
+  agAddUser(typed || t(`(Please summarise ${attached.name})`), attached);
+  agLoadedFile = null; $('agFile').value = ''; showFileInfo('agent');
+  $('agPrompt').value = '';
+  $('agSend').hidden = true; $('agStop').hidden = false;
+  agController = new AbortController();
+  const body = { mode: ag.mode, root: ag.root.trim(), rootName: ag.rootName, target: ag.target.trim(), apps: ag.apps, user: text, history: agHistory,
+    autoApprove: $('agAuto').checked && ag.mode !== 'read', budgetUsd: ag.budget };
+  try {
+    await (IS_APP ? agRunAndroid : agRunWindows)(body, agOnEvent, agController.signal);
+  } catch (e) {
+    agEl('note bad', e?.name === 'AbortError' ? 'Stopped.' : String(e?.message ?? e));
+  } finally {
+    agController = null;
+    $('agSend').hidden = false; $('agStop').hidden = true;
+    api.usage().then(showUsage).catch(() => {});
+  }
+}
+
+async function agPick(){
+  try {
+    if (IS_APP) { const p = await agPickAndroid(); if (p) { ag.root = p.uri; ag.rootName = p.name; } }
+    else {
+      const r = await fetch('/api/pickfolder', { method: 'POST' });
+      const j = await r.json();
+      if (j.path) ag.root = j.path;
+    }
+  } catch { alert('Could not open the folder picker. Type the folder path instead.'); }
+  agSave(); agRefreshBar();
+}
+
+$('agMode').onchange = () => {
+  const m = $('agMode').value;
+  if (m === 'device' && !confirm('In this mode the assistant can read the screen of the apps you choose (up to 5) and tap or type in them (through Android accessibility). What it reads is sent to the AI provider. It cannot use other apps. Switch to phone-app mode?')) { $('agMode').value = ag.mode; return; }
+  if (m === 'screen' && !confirm('In this mode the assistant looks at screenshots of its own browser window. Those screenshots are sent to the vision model provider (DeepInfra, United States). Nothing outside that browser window is captured.\n\nSwitch to screen mode?')) { $('agMode').value = ag.mode; return; }
+  if (m === 'full' && !confirm('Full access lets the assistant read any file you can read and, after you approve each action, change files and run commands anywhere on this PC.\n\nFile contents it reads are sent to the approved AI providers.\n\nSwitch to Full access?')) {
+    $('agMode').value = ag.mode; return;
+  }
+  ag.mode = m; $('agAuto').checked = false; agSave(); agRefreshBar();
+};
+$('agAuto').onchange = () => {
+  if ($('agAuto').checked && !confirm('With auto-approve the assistant will edit, delete and (in Full access) run commands without asking each time. Sensitive files and risky commands will still ask.\n\nTurn auto-approve on?')) $('agAuto').checked = false;
+};
+$('agRoot').onchange = () => { if (ag.mode === 'desktop') { ag.target = $('agRoot').value.trim(); agSave(); } else if (!IS_APP) { ag.root = $('agRoot').value.trim(); agSave(); } };
+$('agPick').onclick = agPick;
+function bridgeCall(fn, ...args) { return new Promise(resolve => { const id = ++bridgeSeq; bridgePending[id] = resolve; window.DSBridge[fn](id, ...args); }); }
+async function agDeviceRefresh(){
+  if (!IS_APP || typeof window.DSBridge.deviceStatus !== 'function') return;
+  try {
+    const st = await bridgeCall('deviceStatus');
+    $('agA11yState').textContent = st.text === 'running' ? 'Accessibility: on' : 'Accessibility: OFF (turn on "DeepSeek Agent" in Settings)';
+    const apps = JSON.parse((await bridgeCall('listApps')).text || '[]');
+    const sel = $('agApp');
+    sel.innerHTML = '';
+    for (const a of apps) { const o = document.createElement('option'); o.value = a.pkg; o.textContent = a.name; if (ag.apps.some(x => x.pkg === a.pkg)) o.selected = true; sel.append(o); }
+    agShowApps();
+  } catch {}
+}
+function agShowApps(){ $('agAppChips').textContent = ag.apps.length ? ag.apps.map(a => a.name).join(', ') : 'No app chosen'; }
+$('agApp').onchange = () => {
+  ag.apps = [...$('agApp').selectedOptions].slice(0, 5).map(o => ({ pkg: o.value, name: o.textContent }));
+  for (const o of $('agApp').options) o.selected = ag.apps.some(a => a.pkg === o.value);   // keep at most 5 selected
+  agShowApps(); agSave();
+};
+$('agA11y').onclick = () => { if (IS_APP) window.DSBridge.openAccessibilitySettings(); };
+document.addEventListener('visibilitychange', () => { if (!document.hidden) agDeviceRefresh(); });
+$('agBudget').oninput = () => { ag.budget = Math.round(Number($('agBudget').value) * 10) / 10; $('agBudgetVal').textContent = '$' + ag.budget.toFixed(2); agSave(); };
+$('agSend').onclick = agSend;
+$('agStop').onclick = () => agController?.abort();
+$('agPrompt').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); agSend(); }
+});
+$('agNew').onclick = () => {
+  if (agController) return;
+  agHistory = []; $('agItems').innerHTML = ''; $('agCost').textContent = '';
+};
+
+function setTab(t){
+  tab = t;
+  $('tabChat').classList.toggle('on', t === 'chat');
+  $('tabAgent').classList.toggle('on', t === 'agent');
+  $('newChat').hidden = t !== 'chat';
+  applyView(null);
+}
+$('tabChat').onclick = () => setTab('chat');
+$('tabAgent').onclick = () => setTab('agent');
+if (IS_APP && typeof window.DSBridge.agentStep !== 'function') $('tabAgent').hidden = true;
+agRefreshBar();
+
+// Draw the history again once the approved-provider list is known, so earlier replies are not mislabelled
+loadRouting().then(() => renderAll()).catch(() => {});
+renderAll();
+if (getKey()) api.usage().then(showUsage).catch(() => { $('usageText').textContent = IS_APP ? 'Could not get balance' : 'Cannot reach the local server'; });
+else { $('usageText').textContent = 'No API key set'; showSetup(false); }
+if (!IS_APP) setInterval(() => fetch('/api/ping').catch(() => {}), 30 * 1000);
+</script>
+</body>
+</html>

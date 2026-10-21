@@ -1,0 +1,19 @@
+{
+  "name": "deepseek-agent",
+  "version": "1.0.0",
+  "description": "Chat app for DeepSeek V4.1 Flash via Vercel AI Gateway, restricted to approved (non-Chinese) inference providers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/copy-vendor.mjs",
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/gateway": "4.0.87",
+    "ai": "7.0.107",
+    "pdfjs-dist": "4.10.38"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

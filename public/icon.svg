@@ -1,0 +1,14 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DeepSeek Agent">
+  <circle cx="128" cy="128" r="120" fill="#2F6FD0"/>
+  <g transform="translate(126,136) scale(0.86) translate(-128,-140)">
+    <g fill="#ffffff">
+      <path d="M200 140c12-16 30-32 44-40 7-4 14 2 11 10-6 16-13 28-19 40 6 12 13 24 19 40 3 8-4 14-11 10-14-8-32-24-44-40z"/>
+      <circle cx="92" cy="30" r="9"/>
+      <circle cx="128" cy="40" r="6"/>
+    </g>
+    <path d="M108 72c0-18 14-26 24-20" stroke="#ffffff" stroke-width="13" fill="none" stroke-linecap="round"/>
+    <ellipse cx="116" cy="146" rx="90" ry="58" fill="#ffffff" transform="rotate(-4 116 146)"/>
+    <circle cx="70" cy="140" r="11" fill="#2F6FD0"/>
+    <path d="M61 162q9 8 18 0" stroke="#2F6FD0" stroke-width="6.5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

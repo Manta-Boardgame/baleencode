@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DeepSeek Agent</string>
+    <string name="a11y_description">Lets the assistant in DeepSeek Agent read and operate only the one app you choose inside the chat, after you approve each action. It never works in other apps.</string>
+</resources>
