@@ -2,6 +2,21 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-10-23
+
+### Added
+- **Web search in the Chat tab** too (Windows and Android), with its own switch next to the message box.
+- **Copy buttons** under every message (your request, and the reply's original Markdown).
+- The model is told the **local date, time and time zone** (it used to get the UTC date, a day off in Japan until 9 a.m.).
+
+### Changed
+- **More accurate web search**, measured: 10 results with longer excerpts, research-based search rules (re-search with other
+  wording or language, confirm key facts in an authoritative source, newest date for "latest", a second targeted search
+  for facts tied to a moment, say when unsure) and a little reasoning while searching. On a 20-question SimpleQA Verified
+  sample: 19/20 before, 20/20 after, at a lower cost per answer ($0.0077 vs $0.0081); 10/10 on current-news questions.
+- The web search switch stays visible on phones, and when it is off the model points the user to it instead of saying
+  that the app has no internet access.
+
 ## [1.2.0] - 2026-10-23
 
 ### Changed

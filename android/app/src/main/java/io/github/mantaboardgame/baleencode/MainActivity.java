@@ -217,6 +217,12 @@ public class MainActivity extends Activity {
         KEYS.put("Home", KeyEvent.KEYCODE_MOVE_HOME); KEYS.put("End", KeyEvent.KEYCODE_MOVE_END); KEYS.put("Space", KeyEvent.KEYCODE_SPACE);
     }
 
+    /** Web search settings, the same as the desktop app (10 results, longer excerpts) */
+    private static JSONObject searchConfig() throws Exception {
+        return new JSONObject().put("max_results", 10)
+                .put("excerpts", new JSONObject().put("max_chars_per_result", 2500).put("max_chars_total", 20000));
+    }
+
     /** The visible part of the assistant's browser as a JPEG (at most 720 px wide) */
     private String agentWebShot() throws Exception {
         int vw = agentWeb.getWidth(), vh = agentWeb.getHeight();
@@ -342,6 +348,11 @@ public class MainActivity extends Activity {
                     JSONObject payload = new JSONObject();
                     payload.put("model", Providers.MODEL);
                     payload.put("messages", messages);
+                    // Web search (opt-in): AI Gateway runs Parallel's search (US); only the search words leave
+                    if (in.optBoolean("webSearch", false)) {
+                        payload.put("tools", new JSONArray().put(new JSONObject().put("type", "vercel:parallel_search").put("config", searchConfig())));
+                        payload.put("tool_choice", "auto");
+                    }
                     payload.put("stream", true);
                     payload.put("stream_options", new JSONObject().put("include_usage", true));
                     payload.put("max_tokens", 8192);
@@ -451,7 +462,7 @@ public class MainActivity extends Activity {
                     // Web search (opt-in): AI Gateway runs Parallel's search (US) and hands the results to the model
                     if (in.optBoolean("webSearch", false)) {
                         if (tools == null) tools = new JSONArray();
-                        tools.put(new JSONObject().put("type", "vercel:parallel_search").put("config", new JSONObject().put("max_results", 5)));
+                        tools.put(new JSONObject().put("type", "vercel:parallel_search").put("config", searchConfig()));
                     }
 
                     JSONObject payload = new JSONObject();

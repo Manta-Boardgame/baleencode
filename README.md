@@ -184,8 +184,9 @@ How it stays safe:
 
 ### Web search
 
-Turn on **Web search** in the Agent tab and the assistant can look things up when it needs current information. AI Gateway runs
-the search with [Parallel](https://parallel.ai/) (United States) and gives the results to the model, which cites its sources.
+Turn on **Web search** (next to the message box, in Chat and in Agent) and the assistant looks things up when it needs current
+information. AI Gateway runs the search with [Parallel](https://parallel.ai/) (United States) and gives the results to the model,
+which cites its sources. The model is also told your local date, time and time zone, so "today" means your today.
 
 - **What leaves your device:** only the search words the assistant writes go to Parallel (through Vercel). Your files and the
   pages it reads are not sent to Parallel. The model itself still runs only on the approved providers.
@@ -195,6 +196,20 @@ the search with [Parallel](https://parallel.ai/) (United States) and gives the r
   two, so it was the cheapest per answer.
 - Search results are treated like web pages: data, never instructions. It is off until you turn it on.
 - You can also make the agent browse a search page itself in the browser modes (for example DuckDuckGo).
+
+**How accurate is it?** Measured with DeepSeek V4.1 Flash through the app's own settings:
+
+| Setup | SimpleQA Verified, 20 random questions | Current-news questions (10, answers checked by hand) | Cost per answer |
+|---|---|---|---|
+| First version (5 results, short rules) | 19 / 20 | 9 / 10 | $0.0081 |
+| **Now** (10 results with longer excerpts, research-based search rules, a little reasoning) | **20 / 20** | **10 / 10** | **$0.0077** |
+
+The rules follow published findings: more and better-ordered evidence helps ([FreshLLMs](https://arxiv.org/abs/2310.03214)),
+checking a draft answer with separate verification searches reduces errors ([Chain-of-Verification](https://arxiv.org/abs/2309.11495)),
+and agents that search again and confirm in primary sources do better on hard questions (as in Claude's web search). A
+page-fetch tool was also tried: it got 20/20 as well, but one long page cost $0.25, so it was left out. Twenty questions is a
+small sample (the margin of error is several points); for reference, search-API vendors report 91–97% on SimpleQA Verified
+with frontier models ([Parallel's benchmarks](https://parallel.ai/benchmarks)).
 
 ### Approval levels
 

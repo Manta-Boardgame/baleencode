@@ -302,7 +302,8 @@ test('web search is off by default; when on, the gateway search tool is added an
     const off = [];
     await run({ mode: 'read', root: s.work }, ['done'], { captured: off });
     assert.ok(!off[0].tools.some(t => String(t.type).startsWith('vercel:')), 'no search tool unless asked for');
-    assert.doesNotMatch(off[0].messages[0].content, /WEB SEARCH/);
+    assert.match(off[0].messages[0].content, /NO WEB SEARCH/);           // tells the user how to turn it on
+    assert.doesNotMatch(off[0].messages[0].content, /parallel_search tool/);
     const on = [];
     await run({ mode: 'read', root: s.work, webSearch: true }, ['done'], { captured: on });
     assert.ok(on[0].tools.some(t => t.type === 'vercel:parallel_search'));

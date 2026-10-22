@@ -6,7 +6,7 @@ import path from 'node:path';
 import { exec, execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ALLOWED_PROVIDERS, BLOCKED_PROVIDERS, MODEL, GATEWAY } from './providers.mjs';
-import { runAgent } from './agent.mjs';
+import { runAgent, SEARCH_TOOL } from './agent.mjs';
 
 const PORT = 4141;
 const MAX_BODY_BYTES = 110 * 1024 * 1024; // uploads larger than this are rejected
@@ -207,6 +207,8 @@ function buildChatRequest(body) {
     stream_options: { include_usage: true },
     max_tokens: Math.min(Number(body.maxTokens) || 8192, 32768),
     reasoning: { effort },
+    // Web search (opt-in): AI Gateway runs Parallel's search (US); only the search words leave
+    ...(body.webSearch === true ? { tools: [SEARCH_TOOL], tool_choice: 'auto' } : {}),
     // Security: route only to the allowed providers. If none of them can serve the
     // request, the gateway returns an error instead of falling back elsewhere.
     providerOptions: { gateway: { only: ALLOWED_PROVIDERS.map(p => p.slug) } },

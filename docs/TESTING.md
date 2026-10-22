@@ -63,6 +63,11 @@ Expected: the log contains one `submit` event with those values, **no** `DELETE_
 | Oct 22 | Android: Settings → Internet page, which Android hides from accessibility services | The app could not see the page and refused to tap (by design) |
 | Oct 22 | Android browser panel, text style: web search for the official Kotlin website on DuckDuckGo | Correct (kotlinlang.org, ads skipped); 5 s, about $0.002 |
 | Oct 22 | Android browser panel, screenshot style: fill and submit httpbin.org's test form | Result page matched (name, size, topping); about $0.004; slow because of the provider's rate limit |
+| Oct 23 | Search accuracy, SimpleQA Verified (20 random questions): first setup vs. 10 results + longer excerpts + search rules + low reasoning | 19/20 → 20/20; $0.0081 → $0.0077 per answer; 8.5 s → 6.5 s |
+| Oct 23 | Same with a page-fetch tool added | 20/20, but one long page cost $0.25; not adopted |
+| Oct 23 | Current-news questions (Nobel prizes 2026, World Cup final, Python / Node.js releases, Japan's PM, a model's price, a not-yet-played World Series) with the adopted setup | 10/10; "latest" questions now pick the newest release |
+| Oct 23 | Chat through the app server with the page's own prompt: today's forecast for Tokyo | Correct local date (Oct 23), Japan Meteorological Agency and three other sources compared |
+| Oct 23 | Copy buttons (request and reply) | Copied with a real click; a script-triggered click is refused by the browser, as intended |
 | Oct 22 | Search providers compared through AI Gateway (DeepSeek, approved providers only): Python release, Node.js LTS changes, Japan's prime minister (in Japanese) | Parallel, Perplexity and Exa all correct with sources; Parallel needed one search per answer in two of three cases ($0.0065 vs about $0.011–0.013) |
 | Oct 22 | Windows `/goal` with web search: find the latest Python 3 release and write it to a file | python.txt = "3.15.1 - 2026-10-21" (python.org); re-checked; GOAL COMPLETE; about $0.035 |
 | Oct 22 | Android agent loop with web search: current Prime Minister of Japan | Correct with sources, one search, 4 s, about $0.007 |

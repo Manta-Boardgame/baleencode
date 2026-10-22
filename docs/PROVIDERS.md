@@ -55,7 +55,8 @@ When you turn on Web search, AI Gateway's `vercel:parallel_search` tool is added
 search words the model writes to Parallel Web Systems (United States), runs the search, and gives the results to the model. Only
 the search words go to Parallel; the model call itself keeps the same allowlist. Parallel's own terms apply to those search words;
 their data-retention terms were not independently checked for this project. Pricing as published by Vercel (checked 2026-10-22):
-$5 per 1,000 searches, up to 10 results each.
+$5 per 1,000 searches, up to 10 results each. The app asks for 10 results with excerpts of up to 2,500 characters each
+(20,000 in total); it is used in both the Chat and the Agent tab when you turn it on.
 
 ## What this does not cover
 
