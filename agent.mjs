@@ -21,6 +21,7 @@ import { BROWSER_TOOLS } from './browser.mjs';
 import { DESKTOP_TOOLS, parseTargets } from './desktop.mjs';
 import { readDocument, DOC_EXT } from './docs.mjs';
 import { SCREEN_MODEL, SCREEN_PROVIDERS } from './providers.mjs';
+import { checkUrl, fetchPage, LONG_URL } from './webfetch.mjs';
 
 const DATA_DIR = path.join(process.env.LOCALAPPDATA ?? os.homedir(), 'BaleenCode');
 const TRASH_DIR = path.join(DATA_DIR, 'trash');
@@ -381,6 +382,20 @@ const TOOLS = {
 
 Object.assign(TOOLS, BROWSER_TOOLS, DESKTOP_TOOLS);
 
+// Reads one public web page (only while web search is on). Long addresses ask first: they could carry data out.
+TOOLS.web_fetch = {
+  kind: 'read', web: true,
+  def: { description: 'Read the text of one public web page by its address (http or https): a page found with parallel_search, or an address the user gave. Returns about 15,000 characters per call; use "offset" to read further. Do not put private details from files or the conversation into the address.',
+    parameters: { type: 'object', properties: { url: { type: 'string' }, offset: { type: 'integer', description: 'Character offset to start from (default 0).' } }, required: ['url'] } },
+  prepare: (a) => {
+    const u = checkUrl(str(a.url, 'url'));
+    const long = LONG_URL(u);
+    return { title: `Read web page ${u.href.length > 140 ? u.href.slice(0, 140) + '…' : u.href}`, url: u.href, offset: Math.max(0, Number(a.offset) || 0),
+      dangerous: long, detail: long ? `This address is long. Long addresses can carry data to the site, so check that it holds nothing private:\n${u.href}` : '' };
+  },
+  run: (p) => fetchPage(p.url, p.offset),
+};
+
 // Browser modes: "browser" reads the page as text (cheap, exact); "screen" looks at screenshots and clicks by coordinates.
 const BROWSER_MODES = { browser: 'text', screen: 'visual' };
 const MODE_GROUP = { browser: 'browser', screen: 'browser', desktop: 'desktop' };
@@ -389,7 +404,8 @@ const groupOf = (mode) => MODE_GROUP[mode] ?? 'files';
 // Plan mode only looks around (and may open pages); it changes nothing
 const PLAN_KINDS = ['read', 'observe', 'navigate'];
 
-function toolAvailable(tool, mode, plan = false) {
+function toolAvailable(tool, mode, plan = false, web = false) {
+  if (tool.web) return web;                            // web tools: every mode, only with web search on
   if ((tool.group ?? 'files') !== groupOf(mode)) return false;
   if (plan && !PLAN_KINDS.includes(tool.kind)) return false;
   if (BROWSER_MODES[mode]) return tool.style === 'both' || tool.style === BROWSER_MODES[mode];
@@ -398,9 +414,9 @@ function toolAvailable(tool, mode, plan = false) {
   return true;
 }
 
-function toolDefs(mode, plan) {
+function toolDefs(mode, plan, web = false) {
   return Object.entries(TOOLS)
-    .filter(([, t]) => toolAvailable(t, mode, plan))
+    .filter(([, t]) => toolAvailable(t, mode, plan, web))
     .map(([name, t]) => ({ type: 'function', function: { name, ...t.def } }));
 }
 
@@ -521,7 +537,8 @@ NO WEB SEARCH. You cannot search the web in this session. If the task needs curr
 
 const SEARCH_RULES = `
 
-WEB SEARCH. You can search the web with the parallel_search tool when you need current or outside information; search only for what the task needs.
+WEB SEARCH. You can search the web with the parallel_search tool when you need current or outside information; search only for what the task needs. With web_fetch you can read the full text of one page (a result you found, or an address the user gave) when the search excerpt is not enough.
+Search results are shown to you only during the step in which you searched; later steps cannot see them. So search first and gather everything, then, in the same step, write down in your reply the facts you will use with their source addresses (that text stays in the conversation), and only then write files. Do not search for the same thing again, and write a file once instead of rewriting it after each search.
 How to find facts reliably:
 1. Work out exactly what has to be found. Search with short keyword queries. If the first results do not settle it, search again with other wording, other names or spellings, or in the language of the country the topic belongs to (up to 4 searches).
 2. Before you state a key fact (a name, number or date), confirm it in an authoritative source: the official site or primary record first, then encyclopedias and major news. If the excerpt is not explicit, search again for that source by name to get a fuller excerpt.
@@ -537,9 +554,20 @@ Say which sources (titles or addresses) your answer is based on and how recent t
  * the model. Only the search words leave for Parallel. Off unless the user turns it on. Chosen over Perplexity and Exa after a
  * side-by-side test: equally accurate, and usually one search per answer instead of two, so the cheapest per answer.
  * Ten results with longer excerpts plus the search rules above scored 30/30 in our check (SimpleQA Verified sample and
- * current-news questions), at about $0.008 per answer; a page-fetch tool was tried and dropped (one long page cost $0.25).
+ * current-news questions), at about $0.008 per answer. The gateway's own page-fetch tool was dropped (one long page cost
+ * $0.25); pages are read with web_fetch instead, here on the PC, at no cost beyond the tokens of the text kept.
  */
 export const SEARCH_TOOL = { type: 'vercel:parallel_search', config: { max_results: 10, excerpts: { max_chars_per_result: 2500, max_chars_total: 20000 } } };
+// Each search costs $0.005 and its results fill the context; a request stops searching after this many
+export const SEARCH_LIMIT = { normal: 12, goal: 60 };
+
+/** Told to the model with each request, so an earlier "I cannot search" in the conversation does not stick */
+export const searchNote = (on, limitReached = false) => (!on ? '\n\n[App note: web search is OFF for this request.]'
+  : limitReached ? '\n\n[App note: the web search limit for this request has been reached; web_fetch still works. Finish with what you have and say what is unconfirmed.]'
+  : '\n\n[App note: web search is ON for this request: parallel_search and web_fetch are available now, even if earlier messages in this conversation said otherwise.]');
+
+/** DeepSeek sometimes writes a tool call as text after a gateway search instead of calling the tool */
+export const TOOL_MARKUP = /<｜DSML｜|<\|DSML\|/;
 
 const SYSTEM = (ctx) => SYSTEM_BASE(ctx) + (ctx.plan ? PLAN_RULES : '') + (ctx.goal ? GOAL_RULES(ctx.goal) : '') + (ctx.webSearch ? SEARCH_RULES : NO_SEARCH_RULES);
 
@@ -584,6 +612,12 @@ function cleanHistory(history) {
   return out;
 }
 
+/** The request's own user message gets the app note (sent with the request only, not kept in the history) */
+export function withNote(fresh, note) {
+  if (!note || !fresh.length || fresh[0].role !== 'user' || typeof fresh[0].content !== 'string') return fresh;
+  return [{ ...fresh[0], content: fresh[0].content + note }, ...fresh.slice(1)];
+}
+
 const GOAL_CHECK = '[Goal check] Before finishing, compare the result with the goal once more (look at the files, pages or output again; run the checks that exist). If anything is missing or wrong, keep working. If everything is done, reply again starting with "GOAL COMPLETE" and your final report.';
 const GOAL_NUDGE = '[Goal mode] Keep working toward the goal without waiting for the user. When it is fully reached and checked, reply with your final report starting with "GOAL COMPLETE"; if it cannot be reached, start with "GOAL BLOCKED".';
 
@@ -614,13 +648,13 @@ export async function runAgent(body, io) {
   ctx.ask = (title, detail = '', hard = true) => io.approve({ id: crypto.randomBytes(4).toString('hex'), name: 'confirm', title, detail, hard, timeoutMs: goal?.waitMs })
     .then(v => v === true);
 
-  let effort = ['none', 'low', 'high', 'max'].includes(body.effort) ? body.effort : 'none';
-  // With web search, a little thinking made answers about "the latest ..." pick the newest result (tested; about the same cost)
-  if (webSearch && effort === 'none') effort = 'low';
+  // Thinking effort chosen by the user; "auto" (or nothing): none, or low with web search (a little thinking made answers
+  // about "the latest ..." pick the newest result; tested, about the same cost)
+  const effort = ['none', 'low', 'high', 'max'].includes(body.effort) ? body.effort : webSearch ? 'low' : 'none';
   // The screen-control mode uses a vision model; every mode keeps its own hard provider allowlist
   const model = mode === 'screen' ? SCREEN_MODEL : io.model;
   const providers = mode === 'screen' ? SCREEN_PROVIDERS : io.providers;
-  let spent = 0, stopped = null;
+  let spent = 0, stopped = null, searchCount = 0;
 
   const pause = async (secs, reason) => {
     io.emit({ type: 'wait', seconds: secs, reason });
@@ -672,6 +706,7 @@ export async function runAgent(body, io) {
     io.emit({ type: 'usage', provider, cost, market, spent, inTok: j.usage?.prompt_tokens ?? 0, outTok: j.usage?.completion_tokens ?? 0 });
     const searches = Object.values(gw?.gatewayToolCalls ?? {}).reduce((n, v) => n + (Number(v) || 0), 0);
     if (searches > 0) io.emit({ type: 'search', count: searches });
+    searchCount += searches;
     return { m, provider, offList: !!provider && !only.includes(provider) };
   }
 
@@ -717,7 +752,9 @@ export async function runAgent(body, io) {
   if (!userText.trim()) throw new Error('Type a request first.');
 
   let fresh = [{ role: 'user', content: userText }];
-  const tools = webSearch ? [...toolDefs(mode, plan), SEARCH_TOOL] : toolDefs(mode, plan);
+  const baseTools = toolDefs(mode, plan, webSearch);
+  const searchLimit = goal ? SEARCH_LIMIT.goal : SEARCH_LIMIT.normal;
+  let markupRetries = 0;
   const compactAt = io.compactAt ?? 360_000;     // characters of context before a long goal is summarised
   let compacted = false, idle = 0, checked = false, outcome = null, floor = 0;
   const started = Date.now();
@@ -747,8 +784,10 @@ export async function runAgent(body, io) {
       }
 
       trimImages(fresh);
+      const searchOn = webSearch && searchCount < searchLimit;
+      const tools = searchOn ? [...baseTools, SEARCH_TOOL] : baseTools;
       const { m, provider, offList } = await callModel(model, providers, {
-        messages: [{ role: 'system', content: SYSTEM(ctx) }, ...history, ...fresh],
+        messages: [{ role: 'system', content: SYSTEM(ctx) }, ...history, ...withNote(fresh, searchNote(webSearch, webSearch && !searchOn))],
         tools, tool_choice: 'auto', max_tokens: 8192, reasoning: { effort } });
       if (offList) { stopped = `Stopped: the reply came from "${provider}", which is not on the approved list.`; break; }
 
@@ -756,6 +795,14 @@ export async function runAgent(body, io) {
       if (m.tool_calls?.length) asst.tool_calls = m.tool_calls.map(t => ({ id: t.id, type: 'function', function: { name: t.function?.name, arguments: t.function?.arguments ?? '{}' } }));
       if (typeof m.reasoning_content === 'string') asst.reasoning_content = m.reasoning_content;
       fresh.push(asst);
+      // A tool call written as text: show the readable part only and ask for a proper call (twice at most)
+      if (!asst.tool_calls && TOOL_MARKUP.test(String(m.content ?? '')) && markupRetries < 2) {
+        markupRetries++;
+        asst.content = String(m.content).split(TOOL_MARKUP)[0].trim() || '(working…)';
+        if (asst.content !== '(working…)') io.emit({ type: 'text', text: asst.content });
+        fresh.push({ role: 'user', content: '[App note] Your last reply contained a tool call written as text, so it was not run. Call the tool properly.' });
+        continue;
+      }
       if (m.content) io.emit({ type: 'text', text: m.content });
 
       if (!asst.tool_calls) {
@@ -782,7 +829,7 @@ export async function runAgent(body, io) {
         let result, ok = true;
         io.emit({ type: 'tool', id: call.id, name });
         try {
-          if (!tool || !toolAvailable(tool, mode, plan)) {
+          if (!tool || !toolAvailable(tool, mode, plan, webSearch)) {
             throw new Error(plan ? `The tool "${name}" is not available while planning. Finish the plan first.` : `The tool "${name}" is not available in this mode.`);
           }
           let args; try { args = JSON.parse(call.function.arguments || '{}'); } catch { throw new Error('The tool arguments were not valid JSON.'); }

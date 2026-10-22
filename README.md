@@ -196,6 +196,12 @@ which cites its sources. The model is also told your local date, time and time z
   two, so it was the cheapest per answer.
 - Search results are treated like web pages: data, never instructions. It is off until you turn it on.
 - You can also make the agent browse a search page itself in the browser modes (for example DuckDuckGo).
+- **Reading pages:** with Web search on, the agent can read the full text of a page (a search result, or an address you gave),
+  and in Chat the pages whose addresses you paste are read. Pages are fetched directly from your device, never through a
+  third party: public addresses only (not this device or the local network), GET only, no cookies, at most 3 MB; sites under
+  China's country domains are refused, and a long address (which could carry data out) asks you first.
+- Each request tells the model whether search is on right now, so an earlier "I cannot search" in the conversation does not
+  stick. A request stops searching after 12 searches (60 in goal mode).
 
 **How accurate is it?** Measured with DeepSeek V4.1 Flash through the app's own settings:
 
@@ -249,7 +255,8 @@ Tested with the real model on Windows and with the Android loop: the agent read 
 | `/compact` | Replace the conversation so far with a summary to save cost and room. |
 | `/cost` | Cost of this session (and of the goal) and the free credits left (alias `/usage`). |
 | `/status` | Mode, folder, approval level, cost limit, goal. |
-| `/clear` | Start a new session (alias `/new`). |
+| `/new` | Start a new conversation in a new tab; the others are kept (tabs above the conversation: ✎ renames, × deletes). |
+| `/clear` | Clear the open conversation. |
 | `/help` | List the commands. Typing `/` shows suggestions; Tab completes. |
 
 ### Reading documents in Agent mode
@@ -365,7 +372,7 @@ npm install
 npm test
 ```
 
-23 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
+27 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
 is fooled: folder escapes (`..`, absolute paths, junctions), per-mode tool sets, the three approval levels, the ask-first list
 (secrets, permanent deletes, `git push`, data upload commands) even at the Autonomous level, plan mode changing nothing, goal mode
 (continuing, checking, skipping unanswered approvals, compacting with the same allowlist), web search being off unless turned on and never in summaries, the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB

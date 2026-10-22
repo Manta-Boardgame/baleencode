@@ -323,3 +323,64 @@ test('the summary request of a long goal never carries the search tool', async (
     assert.ok(captured[1].tools.some(t => t.type === 'vercel:parallel_search'));
   } finally { s.done(); }
 });
+
+test('each request tells the model the current search setting, without storing that note in the history', async () => {
+  const s = sandbox();
+  try {
+    const on = [];
+    const r = await run({ mode: 'read', root: s.work, webSearch: true, user: 'look it up',
+      history: [{ role: 'user', content: 'search' }, { role: 'assistant', content: 'I have no search tool.' }] }, ['done'], { captured: on });
+    const last = on[0].messages[on[0].messages.length - 1];
+    assert.match(last.content, /^look it up\n\n\[App note: web search is ON/);   // overrides the old "no search tool"
+    assert.equal(r.messages[0].content, 'look it up');                          // the saved history stays clean
+    const off = [];
+    await run({ mode: 'read', root: s.work, user: 'hi' }, ['done'], { captured: off });
+    assert.match(off[0].messages[off[0].messages.length - 1].content, /web search is OFF/);
+  } finally { s.done(); }
+});
+
+test('web_fetch is offered only with web search on, refuses private addresses and asks first for long addresses', async () => {
+  const s = sandbox();
+  try {
+    const off = [];
+    await run({ mode: 'read', root: s.work }, ['done'], { captured: off });
+    assert.ok(!off[0].tools.some(t => t.function?.name === 'web_fetch'));
+    const blocked = await run({ mode: 'read', root: s.work }, [[['web_fetch', { url: 'https://example.com/' }]], 'done']);
+    assert.match(blocked.results[0], /not available/);
+    const on = [];
+    const r = await run({ mode: 'read', root: s.work, webSearch: true }, [[
+      ['web_fetch', { url: 'http://127.0.0.1:4141/api/usage' }], ['web_fetch', { url: 'http://192.168.1.1/' }],
+      ['web_fetch', { url: 'file:///C:/Windows/win.ini' }], ['web_fetch', { url: 'https://www.example.cn/' }],
+      ['web_fetch', { url: 'https://example.com/?q=' + 'a'.repeat(300) }]], 'done'], { captured: on });
+    assert.ok(on[0].tools.some(t => t.function?.name === 'web_fetch'));
+    assert.match(r.results[0], /Only public web pages/);
+    assert.match(r.results[1], /Only public web pages/);
+    assert.match(r.results[2], /Only http and https/);
+    assert.match(r.results[3], /China/);
+    assert.equal(r.asked.length, 1);                       // the long address asked first (and was denied here)
+    assert.equal(r.asked[0].hard, true);
+    assert.match(r.results[4], /denied/);
+  } finally { s.done(); }
+});
+
+test('a tool call written as text is not shown as the answer; the model is asked to call the tool properly', async () => {
+  const s = sandbox();
+  try {
+    const captured = [];
+    const r = await run({ mode: 'read', root: s.work }, ['Found it. <｜DSML｜ calls> <｜DSML｜ invoke name="list_dir">', 'done'], { captured });
+    assert.equal(captured.length, 2);
+    assert.match(captured[1].messages[captured[1].messages.length - 1].content, /tool call written as text/);
+    assert.ok(r.messages.every(m => !String(m.content ?? '').includes('DSML')));
+  } finally { s.done(); }
+});
+
+test('the thinking effort follows the user\'s choice; "auto" is none, or low with web search', async () => {
+  const s = sandbox();
+  try {
+    for (const [body, want] of [[{}, 'none'], [{ webSearch: true }, 'low'], [{ effort: 'high' }, 'high'], [{ effort: 'none', webSearch: true }, 'none'], [{ effort: 'bogus' }, 'none']]) {
+      const c = [];
+      await run({ mode: 'read', root: s.work, ...body }, ['done'], { captured: c });
+      assert.equal(c[0].reasoning.effort, want, JSON.stringify(body));
+    }
+  } finally { s.done(); }
+});

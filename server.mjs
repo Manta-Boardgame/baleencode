@@ -7,6 +7,7 @@ import { exec, execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ALLOWED_PROVIDERS, BLOCKED_PROVIDERS, MODEL, GATEWAY } from './providers.mjs';
 import { runAgent, SEARCH_TOOL } from './agent.mjs';
+import { fetchPage } from './webfetch.mjs';
 
 const PORT = 4141;
 const MAX_BODY_BYTES = 110 * 1024 * 1024; // uploads larger than this are rejected
@@ -303,6 +304,13 @@ async function handle(req, res) {
     delete ledger.lastCost; delete ledger.lastMarket; delete ledger.lastIn; delete ledger.lastOut;
     fs.writeFileSync(LEDGER, JSON.stringify(ledger, null, 2));
     return;
+  }
+
+  // Chat with web search on: reads the page of an address the user pasted (public pages only; see webfetch.mjs)
+  if (req.method === 'POST' && req.url === '/api/fetch') {
+    let b; try { b = JSON.parse((await readBody(req)).toString('utf8')); } catch { return send(res, 400, { error: 'Bad request.' }); }
+    try { return send(res, 200, { text: await fetchPage(String(b.url ?? ''), Number(b.offset) || 0) }); }
+    catch (e) { return send(res, 400, { error: String(e?.message ?? e) }); }
   }
 
   // ---- Agent mode ----

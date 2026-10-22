@@ -2,6 +2,32 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-10-23
+
+### Fixed
+- **The agent said it had no search tool although Web search was on.** The cause: earlier replies in the same conversation
+  ("I cannot search") outweighed the setting, and a conversation could not be deleted. Each request now tells the model
+  whether web search is on or off right now (sent with the request only, not stored), and conversations can be deleted.
+- Search results were visible to the model only during the step that searched, so it searched the same things again and
+  rewrote files after every search (one test request hit the $0.30 limit). The model now writes down the facts it found with
+  their sources before acting, a request stops searching after 12 searches (60 in goal mode), and the same task now cost
+  $0.05 instead of $0.31.
+- A tool call that the model wrote as text (after a search) is no longer shown as the answer; the model is asked to call the
+  tool properly.
+
+### Added
+- **Reading web pages.** With Web search on, the agent can read the full text of a page (`web_fetch`), and in the Chat tab the
+  pages whose addresses you paste are read and given to the model. Pages are read directly from your device: public
+  addresses only (never this device or the local network), GET only, no cookies, at most 3 MB, sites under China's country
+  domains refused, and long addresses (which could carry data out) ask first.
+- **Conversation tabs** in the Agent tab: several conversations side by side, each with its own history and goal; rename (✎),
+  delete (×), new (＋ or `/new`). `/clear` empties the open one. The single conversation of earlier versions becomes the first tab.
+- **Thinking setting** for the agent (⚙): Auto, Off, Low, High, Maximum.
+- The live status shows the **cost of the request so far** and has its own line, so it is no longer cut off on phones.
+
+### Changed
+- On a short screen (a phone held sideways) the extra settings fold behind ⚙ so the conversation stays visible.
+
 ## [1.3.0] - 2026-10-23
 
 ### Added

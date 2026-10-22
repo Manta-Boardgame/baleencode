@@ -18,8 +18,8 @@ android {
         applicationId "io.github.mantaboardgame.baleencode"
         minSdk 24
         targetSdk 36
-        versionCode 5
-        versionName "1.3.0"
+        versionCode 6
+        versionName "1.4.0"
         // `-Parm64Only` builds a smaller APK for current phones (the native OCR libraries are shipped for one CPU type only)
         if (project.hasProperty('arm64Only')) {
             ndk { abiFilters 'arm64-v8a' }

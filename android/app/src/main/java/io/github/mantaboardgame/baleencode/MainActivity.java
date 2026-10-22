@@ -54,7 +54,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URL;
+import java.util.Locale;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -140,6 +142,19 @@ public class MainActivity extends Activity {
                 return true;
             }
 
+            // Used to rename a conversation
+            @Override
+            public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, android.webkit.JsPromptResult result) {
+                android.widget.EditText input = new android.widget.EditText(MainActivity.this);
+                input.setSingleLine(true);
+                if (defaultValue != null) { input.setText(defaultValue); input.setSelection(input.getText().length()); }
+                new AlertDialog.Builder(MainActivity.this).setMessage(message).setView(input)
+                        .setPositiveButton("OK", (d, w) -> result.confirm(input.getText().toString()))
+                        .setNegativeButton("Cancel", (d, w) -> result.cancel())
+                        .setOnCancelListener(d -> result.cancel()).show();
+                return true;
+            }
+
             // "Attach file" opens the system file picker
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
@@ -215,6 +230,23 @@ public class MainActivity extends Activity {
         KEYS.put("ArrowLeft", KeyEvent.KEYCODE_DPAD_LEFT); KEYS.put("ArrowRight", KeyEvent.KEYCODE_DPAD_RIGHT);
         KEYS.put("PageUp", KeyEvent.KEYCODE_PAGE_UP); KEYS.put("PageDown", KeyEvent.KEYCODE_PAGE_DOWN);
         KEYS.put("Home", KeyEvent.KEYCODE_MOVE_HOME); KEYS.put("End", KeyEvent.KEYCODE_MOVE_END); KEYS.put("Space", KeyEvent.KEYCODE_SPACE);
+    }
+
+    /** Only public internet hosts: not this phone, the local network, other private ranges, or China's country domains */
+    private static void checkPublicHost(String host) throws Exception {
+        String h = host == null ? "" : host.toLowerCase(Locale.ROOT).replaceAll("^\\[|\\]$", "");
+        if (h.isEmpty() || h.equals("localhost") || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) {
+            throw new Exception("Only public web pages can be read.");
+        }
+        if (h.matches(".*\\.(cn|xn--fiqs8s|xn--fiqz9s|中国|中國)\\.?$")) throw new Exception("Sites under China's country domains are not read by this app.");
+        for (InetAddress a : InetAddress.getAllByName(h)) {
+            byte[] b = a.getAddress();
+            int b0 = b[0] & 0xff, b1 = b.length > 1 ? b[1] & 0xff : 0;
+            boolean bad = a.isAnyLocalAddress() || a.isLoopbackAddress() || a.isLinkLocalAddress() || a.isSiteLocalAddress() || a.isMulticastAddress()
+                    || (b.length == 4 && (b0 == 0 || b0 >= 224 || (b0 == 100 && b1 >= 64 && b1 <= 127) || (b0 == 192 && b1 == 0) || (b0 == 198 && (b1 == 18 || b1 == 19))))
+                    || (b.length == 16 && (b0 & 0xfe) == 0xfc);
+            if (bad) throw new Exception("Only public web pages can be read.");
+        }
     }
 
     /** Web search settings, the same as the desktop app (10 results, longer excerpts) */
@@ -503,6 +535,74 @@ public class MainActivity extends Activity {
         }
 
         /** File operations inside the chosen folder (see AgentFs) */
+        /**
+         * Reads one public web page for the agent's web_fetch tool: GET only, no cookies, at most 5 redirects (each checked
+         * again), at most 3 MB. Addresses on this phone, the local network or other private ranges are refused, and so are
+         * China's country domains. Plain http is tried as https (Android blocks unencrypted traffic).
+         */
+        @JavascriptInterface
+        public void webFetch(int id, String json) {
+            io.execute(() -> {
+                HttpURLConnection c = null;
+                try {
+                    String url = new JSONObject(json).getString("url");
+                    for (int hop = 0; ; hop++) {
+                        URL u = new URL(url);
+                        if ("http".equals(u.getProtocol())) u = new URL("https", u.getHost(), u.getPort() == 80 ? -1 : u.getPort(), u.getFile());
+                        if (!"https".equals(u.getProtocol())) throw new Exception("Only http and https pages can be read.");
+                        if (u.getUserInfo() != null) throw new Exception("Addresses with a user name or password are not read.");
+                        checkPublicHost(u.getHost());
+                        c = (HttpURLConnection) u.openConnection();
+                        c.setInstanceFollowRedirects(false);
+                        c.setUseCaches(false);
+                        c.setConnectTimeout(15000);
+                        c.setReadTimeout(20000);
+                        c.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; BaleenCode web_fetch)");
+                        c.setRequestProperty("Accept", "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5");
+                        c.setRequestProperty("Accept-Language", "ja,en;q=0.8");
+                        int status = c.getResponseCode();
+                        String loc = c.getHeaderField("Location");
+                        if (status >= 300 && status < 400 && loc != null) {
+                            if (hop >= 5) throw new Exception("Too many redirects.");
+                            url = new URL(u, loc).toString();
+                            c.disconnect(); c = null;
+                            continue;
+                        }
+                        if (status >= 400) throw new Exception("The site answered with HTTP " + status + ".");
+                        String type = c.getContentType() == null ? "" : c.getContentType();
+                        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                        boolean cut = false;
+                        try (InputStream is = c.getInputStream()) {
+                            byte[] buf = new byte[16384];
+                            int n;
+                            while ((n = is.read(buf)) > 0) {
+                                if (bo.size() + n > 3 * 1024 * 1024) { cut = true; break; }
+                                bo.write(buf, 0, n);
+                            }
+                        }
+                        byte[] raw = bo.toByteArray();
+                        String cs = null;
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("charset=([\\w-]+)", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(type);
+                        if (m.find()) cs = m.group(1);
+                        if (cs == null) {
+                            String head = new String(raw, 0, Math.min(raw.length, 2048), StandardCharsets.ISO_8859_1);
+                            java.util.regex.Matcher mm = java.util.regex.Pattern.compile("<meta[^>]+charset=[\"']?([\\w-]+)", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(head);
+                            if (mm.find()) cs = mm.group(1);
+                        }
+                        String body;
+                        try { body = new String(raw, java.nio.charset.Charset.forName(cs == null ? "UTF-8" : cs.equalsIgnoreCase("sjis") || cs.equalsIgnoreCase("x-sjis") ? "Shift_JIS" : cs)); }
+                        catch (Exception e) { body = new String(raw, StandardCharsets.UTF_8); }
+                        deliver(id, 200, new JSONObject().put("url", u.toString()).put("type", type).put("body", body).put("cut", cut).toString());
+                        return;
+                    }
+                } catch (Exception e) {
+                    deliver(id, 400, String.valueOf(e.getMessage()));
+                } finally {
+                    if (c != null) c.disconnect();
+                }
+            });
+        }
+
         @JavascriptInterface
         public void fsOp(int id, String json) {
             io.execute(() -> {

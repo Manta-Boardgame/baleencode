@@ -63,6 +63,10 @@ Expected: the log contains one `submit` event with those values, **no** `DELETE_
 | Oct 22 | Android: Settings → Internet page, which Android hides from accessibility services | The app could not see the page and refused to tap (by design) |
 | Oct 22 | Android browser panel, text style: web search for the official Kotlin website on DuckDuckGo | Correct (kotlinlang.org, ads skipped); 5 s, about $0.002 |
 | Oct 22 | Android browser panel, screenshot style: fill and submit httpbin.org's test form | Result page matched (name, size, topping); about $0.004; slow because of the provider's rate limit |
+| Oct 23 | Agent with web search on, in a conversation that already held three "I have no search tool" replies (the user's report), Android loop with the native request rules | Before: answered from the old replies without searching (on the phone). After: searched at once, read six php.net / GitHub pages, wrote the report once — $0.054, 46 s (before the step-memory rule: 6 rewrites, stopped at the $0.30 limit after 400 s) |
+| Oct 23 | Same on Windows through the app server (Node.js LTS question) | 1 search, 3 pages read (nodejs.org), file written once; $0.015 |
+| Oct 23 | Installed 1.4.0 over 1.3.0 on a Nothing Phone (3a), Android 15 | Old conversation kept as the first tab; agent searched (1) and read php.net natively; live status showed tokens and $0.0139 |
+| Oct 23 | Page reader refusals | 127.0.0.1, localhost, 192.168.x, file://, a .cn site: all refused; php.net, Wikipedia: text extracted (main content only) |
 | Oct 23 | Search accuracy, SimpleQA Verified (20 random questions): first setup vs. 10 results + longer excerpts + search rules + low reasoning | 19/20 → 20/20; $0.0081 → $0.0077 per answer; 8.5 s → 6.5 s |
 | Oct 23 | Same with a page-fetch tool added | 20/20, but one long page cost $0.25; not adopted |
 | Oct 23 | Current-news questions (Nobel prizes 2026, World Cup final, Python / Node.js releases, Japan's PM, a model's price, a not-yet-played World Series) with the adopted setup | 10/10; "latest" questions now pick the newest release |

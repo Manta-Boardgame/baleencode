@@ -90,10 +90,11 @@
     observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
   }
 
-  // alert / confirm messages
-  const _alert = window.alert.bind(window), _confirm = window.confirm.bind(window);
+  // alert / confirm / prompt messages
+  const _alert = window.alert.bind(window), _confirm = window.confirm.bind(window), _prompt = window.prompt.bind(window);
   window.alert = (m) => _alert(tr(String(m)));
   window.confirm = (m) => _confirm(tr(String(m)));
+  window.prompt = (m, d) => _prompt(tr(String(m)), d);
 
   function langButton() {
     const b = document.getElementById('langBtn');
