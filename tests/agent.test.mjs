@@ -293,3 +293,32 @@ test('goal mode compacts a context that grew too large into a summary, using the
     assert.match(r.messages[0].content, /Summary: nothing done yet/);
   } finally { s.done(); }
 });
+
+// ---- web search ----
+
+test('web search is off by default; when on, the gateway search tool is added and the provider allowlist is unchanged', async () => {
+  const s = sandbox();
+  try {
+    const off = [];
+    await run({ mode: 'read', root: s.work }, ['done'], { captured: off });
+    assert.ok(!off[0].tools.some(t => String(t.type).startsWith('vercel:')), 'no search tool unless asked for');
+    assert.doesNotMatch(off[0].messages[0].content, /WEB SEARCH/);
+    const on = [];
+    await run({ mode: 'read', root: s.work, webSearch: true }, ['done'], { captured: on });
+    assert.ok(on[0].tools.some(t => t.type === 'vercel:parallel_search'));
+    assert.deepEqual(on[0].providerOptions.gateway.only, ALLOWED);
+    assert.match(on[0].messages[0].content, /WEB SEARCH/);
+  } finally { s.done(); }
+});
+
+test('the summary request of a long goal never carries the search tool', async () => {
+  const s = sandbox();
+  try {
+    const captured = [];
+    await run({ mode: 'folder', root: s.work, user: 'x'.repeat(500), webSearch: true, goal: { objective: 'Long task' } },
+      ['Summary.', 'GOAL BLOCKED: test'], { captured, compactAt: 100 });
+    assert.match(captured[0].messages[0].content, /compact the log/);
+    assert.ok(!(captured[0].tools ?? []).some(t => String(t.type).startsWith('vercel:')));
+    assert.ok(captured[1].tools.some(t => t.type === 'vercel:parallel_search'));
+  } finally { s.done(); }
+});

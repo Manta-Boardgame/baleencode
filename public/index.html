@@ -181,6 +181,7 @@
         <option value="screen">Browser · looks at screenshots</option>
         <option value="desktop">Desktop apps · chosen windows (Windows)</option>
         <option value="device">Phone apps · chosen apps (Android)</option>
+        <option value="devicescreen">Phone apps · looks at screenshots (Android)</option>
       </select>
       <button class="filebtn" id="agPick">Choose folder…</button>
       <input type="text" id="agRoot" placeholder="Folder path (or use Choose folder)" spellcheck="false" autocomplete="off">
@@ -192,6 +193,7 @@
           <option value="edits">Auto-accept edits</option>
           <option value="auto">Autonomous (asks only for risky actions)</option>
         </select></label>
+      <label class="hint" id="agWebLabel" title="Let the assistant search the web (Parallel search through Vercel)"><input type="checkbox" id="agWeb"> Web search</label>
       <label class="hint" title="The assistant stops when one request has cost this much">Max cost per request
         <input type="range" id="agBudget" min="0.1" max="5" step="0.1" value="0.3"> <b id="agBudgetVal">$0.30</b></label>
       <button class="link" id="agNew">New session</button>
@@ -823,9 +825,14 @@ $('keySave').onclick = async () => {
 
 // =================== agent mode ===================
 const AG_KEY = 'ds-agent-settings';
-const ag = { mode: 'folder', root: '', rootName: '', budget: 0.3, target: '', app: '', appName: '', apps: [], level: 'edits', goalHours: 8 };
+const ag = { mode: 'folder', root: '', rootName: '', budget: 0.3, target: '', app: '', appName: '', apps: [], level: 'edits', goalHours: 8, webSearch: false };
 try { Object.assign(ag, JSON.parse(localStorage.getItem(AG_KEY) || '{}')); } catch {}
-if (!['read', 'folder', 'full', 'browser', 'screen', 'desktop', 'device'].includes(ag.mode) || (IS_APP && !['read', 'folder', 'device'].includes(ag.mode)) || (!IS_APP && ag.mode === 'device')) ag.mode = 'folder';
+// Modes each platform offers (Android: no shell, so no Full access; the browser modes use a panel inside the app)
+const APP_BROWSER = IS_APP && typeof window.DSBridge?.browserOp === 'function';
+const AG_MODES = IS_APP ? ['read', 'folder', 'device', 'devicescreen', ...(APP_BROWSER ? ['browser', 'screen'] : [])]
+  : ['read', 'folder', 'full', 'browser', 'screen', 'desktop'];
+if (!AG_MODES.includes(ag.mode)) ag.mode = 'folder';
+const isDev = (m) => m === 'device' || m === 'devicescreen';
 if (!(ag.budget >= 0.1 && ag.budget <= 5)) ag.budget = 0.3;
 if (!Array.isArray(ag.apps)) ag.apps = ag.app ? [{ pkg: ag.app, name: ag.appName }] : [];
 if (!['ask', 'edits', 'auto'].includes(ag.level)) ag.level = 'edits';
@@ -883,31 +890,38 @@ MODE_HELP.browser = 'Opens its own Edge window (separate profile, none of your l
 MODE_HELP.screen = 'Same separate browser window, but the assistant looks at screenshots (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and clicks by pixel position. Screenshots of that browser window are sent to that provider. Purchases, deletes, sending or posting, and password fields ask first.';
 MODE_HELP.desktop = 'Works only on the application windows whose titles you type below (up to 5, separated by commas, for example Calculator, Notepad). The assistant sees a window\'s controls as a list and presses buttons / fills text boxes through Windows accessibility, so it cannot touch other windows. Apps that do not expose their controls cannot be operated. Deletes, purchases, sending and password fields ask first.';
 MODE_HELP.device = 'Works only on the apps you choose below (up to 5), through Android accessibility: it sees an app\'s controls as a list and taps / types in them. It cannot use any other app. You must turn the accessibility service on once in Settings (Android shows its own warning). Deletes, purchases, sending and password fields ask first. While the assistant works in the other app, come back here to approve (or use split screen).';
-function agSave(){ try { localStorage.setItem(AG_KEY, JSON.stringify({ mode: ag.mode, root: ag.root, rootName: ag.rootName, budget: ag.budget, target: ag.target, apps: ag.apps, level: ag.level, goalHours: ag.goalHours })); } catch {} }
+const MODE_HELP_APP = {
+  browser: 'Opens a browser panel inside this app (its own storage, none of your phone browser\'s logins) and drives it. It reads the page as text, so it is cheap and exact. If a site needs a login, log in yourself in the panel. Purchases, deletes, sending or posting, and password fields ask first.',
+  screen: 'Same browser panel, but the assistant looks at screenshots (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and taps by position. Screenshots of the panel are sent to that provider. Purchases, deletes, sending or posting, and password fields ask first.',
+};
+MODE_HELP.devicescreen = 'Looks at screenshots of the apps you choose below (up to 5): the assistant sees them (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and taps, swipes and types at screen positions, through Android accessibility. Use it for apps whose controls the list mode cannot read. Screenshots are sent to that provider. A tap is refused unless the point lies on a chosen app; taps on purchase, delete, send or password controls ask first. Turn the accessibility service on once in Settings.';
+function agSave(){ try { localStorage.setItem(AG_KEY, JSON.stringify({ mode: ag.mode, root: ag.root, rootName: ag.rootName, budget: ag.budget, target: ag.target, apps: ag.apps, level: ag.level, goalHours: ag.goalHours, webSearch: ag.webSearch === true })); } catch {} }
 
 function agRefreshBar(){
   $('agMode').value = ag.mode;
   const full = ag.mode === 'full';
   const desk = ag.mode === 'desktop';
-  const dev = ag.mode === 'device';
+  const dev = isDev(ag.mode);
   $('agRoot').value = desk ? ag.target : IS_APP ? ag.rootName : ag.root;
   $('agRoot').readOnly = IS_APP && !desk;
   $('agRoot').placeholder = desk ? 'Part of a window title; several allowed, separated by commas (e.g. Calculator, Notepad)' : IS_APP ? 'No folder chosen' : full ? 'Start in (optional)' : 'Folder path (or use Choose folder)';
   $('agMode').querySelector('option[value=full]').hidden = IS_APP;
   $('agMode').querySelector('option[value=full]').disabled = IS_APP;
-  $('agHelp').textContent = MODE_HELP[ag.mode] + (IS_APP ? ' Android only lets the assistant see the one folder you choose.' : '');
+  $('agHelp').textContent = ((IS_APP && MODE_HELP_APP[ag.mode]) || MODE_HELP[ag.mode]) + (IS_APP && ['read', 'folder'].includes(ag.mode) ? ' Android only lets the assistant see the one folder you choose.' : '');
   $('agHelp').className = 'modehelp' + (full ? ' danger' : '');
   const web = ag.mode === 'browser' || ag.mode === 'screen';
   $('agPick').hidden = web || desk || dev; $('agRoot').hidden = web || dev;
-  { const o = $('agMode').querySelector('option[value=device]'); o.hidden = !IS_APP; o.disabled = !IS_APP; }
+  for (const o of $('agMode').options) { o.hidden = !AG_MODES.includes(o.value); o.disabled = o.hidden; }
   $('agDeviceRow').hidden = !dev;
   if (dev) agDeviceRefresh();
-  for (const v of ['full', 'browser', 'screen', 'desktop']) { const o = $('agMode').querySelector('option[value=' + v + ']'); o.hidden = IS_APP; o.disabled = IS_APP; }
+  // The browser panel is shown only in the browser modes (Android)
+  if (APP_BROWSER) { try { window.DSBridge.browserOp(++bridgeSeq, JSON.stringify({ op: 'show', on: web })); } catch {} }
   $('agLevelLabel').hidden = ag.mode === 'read';
   $('agLevel').value = ag.level;
   $('agLevelHelp').textContent = ag.mode === 'read' ? '' : LEVEL_HELP[ag.level];
   $('agLevelHelp').className = 'modehelp' + (ag.level === 'auto' ? ' danger' : '');
   $('agBudget').value = ag.budget; $('agBudgetVal').textContent = '$' + ag.budget.toFixed(2);
+  $('agWeb').checked = ag.webSearch === true;
 }
 
 function agEl(cls, text){
@@ -1013,6 +1027,7 @@ function agOnEvent(ev, approve){
     case 'run': agRunId = ev.id; break;
     case 'step': $('agStep').textContent = ev.max ? `Step ${ev.n}/${ev.max}` : `Goal · step ${ev.n} · ${agElapsed(ev.elapsed)}`; break;
     case 'compact': agEl('note', 'The context was getting long: summarising the older steps…'); break;
+    case 'search': agEl('note', `🔎 Searched the web (${ev.count})`); break;
     case 'approval_expired': {
       const c = agCards[ev.approvalId];
       if (c) { c.allow.disabled = c.deny.disabled = true; c.state.textContent = 'No answer: skipped'; }
@@ -1071,7 +1086,7 @@ function agElapsed(ms){
 function agReady(){
   if (!getKey()) { showSetup(true); return false; }
   if (['read', 'folder'].includes(ag.mode) && !ag.root.trim()) { alert('Choose a folder first.'); return false; }
-  if (ag.mode === 'device' && !ag.apps.length) { alert('Choose the app(s) the assistant may use first.'); return false; }
+  if (isDev(ag.mode) && !ag.apps.length) { alert('Choose the app(s) the assistant may use first.'); return false; }
   if (ag.mode === 'desktop' && !ag.target.trim()) { alert('Type part of the title of each window the assistant may use, separated by commas (for example: Calculator, Notepad).'); return false; }
   return true;
 }
@@ -1085,7 +1100,7 @@ async function agRun({ text, shown, file = null, extra = {} }){
   agRunInfo = { goal: !!extra.goal, plan: !!extra.plan, compact: extra.command === 'compact' };
   if (extra.goal && agGoal) { agGoal.status = 'running'; agSaveGoal(); }
   const body = { mode: ag.mode, root: ag.root.trim(), rootName: ag.rootName, target: ag.target.trim(), apps: ag.apps, user: text, history: agHistory,
-    approval: ag.level, budgetUsd: ag.budget, ...extra };
+    approval: ag.level, budgetUsd: ag.budget, webSearch: ag.webSearch === true, ...extra };
   try {
     await (IS_APP ? agRunAndroid : agRunWindows)(body, agOnEvent, agController.signal);
   } catch (e) {
@@ -1171,9 +1186,9 @@ async function agCommand(cmd, arg){
       return;
     }
     case '/status': {
-      const where = ag.mode === 'desktop' ? ag.target : ag.mode === 'device' ? ag.apps.map(a => a.name).join(', ') : IS_APP ? ag.rootName : ag.root;
+      const where = ag.mode === 'desktop' ? ag.target : isDev(ag.mode) ? ag.apps.map(a => a.name).join(', ') : ['browser', 'screen'].includes(ag.mode) ? '—' : IS_APP ? ag.rootName : ag.root;
       agCard([[t('Mode'), $('agMode').selectedOptions[0]?.textContent || ag.mode], [t('Working in'), where || '—'],
-        [t('Approval'), t(LEVEL_NAME[ag.level])], [t('Max cost per request'), '$' + ag.budget.toFixed(2)],
+        [t('Approval'), t(LEVEL_NAME[ag.level])], [t('Web search'), t(ag.webSearch ? 'On' : 'Off')], [t('Max cost per request'), '$' + ag.budget.toFixed(2)],
         [t('Goal'), agGoal ? `${agGoal.objective} (${t(GOAL_STATE[agGoal.status] || agGoal.status)})` : '—'],
         [t('Messages in context'), String(agHistory.length)]], t('Status'));
       return;
@@ -1315,6 +1330,7 @@ async function agPick(){
 $('agMode').onchange = () => {
   const m = $('agMode').value;
   if (m === 'device' && !confirm('In this mode the assistant can read the screen of the apps you choose (up to 5) and tap or type in them (through Android accessibility). What it reads is sent to the AI provider. It cannot use other apps. Switch to phone-app mode?')) { $('agMode').value = ag.mode; return; }
+  if (m === 'devicescreen' && !confirm('In this mode the assistant looks at screenshots of the apps you choose (up to 5) and taps, swipes and types at screen positions (through Android accessibility). The screenshots are sent to the vision model provider (DeepInfra, United States). Taps outside the chosen apps are refused.\n\nSwitch to this mode?')) { $('agMode').value = ag.mode; return; }
   if (m === 'screen' && !confirm('In this mode the assistant looks at screenshots of its own browser window. Those screenshots are sent to the vision model provider (DeepInfra, United States). Nothing outside that browser window is captured.\n\nSwitch to screen mode?')) { $('agMode').value = ag.mode; return; }
   if (m === 'full' && !confirm('Full access lets the assistant read any file you can read, and change files and run commands anywhere on this PC. How often it asks you first depends on the approval level.\n\nFile contents it reads are sent to the approved AI providers.\n\nSwitch to Full access?')) {
     $('agMode').value = ag.mode; return;
@@ -1322,6 +1338,13 @@ $('agMode').onchange = () => {
   ag.mode = m; agSave(); agRefreshBar();
 };
 $('agLevel').onchange = () => agSetLevel($('agLevel').value);
+$('agWeb').onchange = () => {
+  if ($('agWeb').checked && !confirm('Web search lets the assistant look things up on the web when it needs to.\n'
+    + 'The search words it writes are sent through Vercel to Parallel (United States), which runs the search. Your files and pages are not sent, only the search words.\n'
+    + 'Each search costs about $0.005, on top of the usual cost.\n'
+    + 'Turn web search on?')) { $('agWeb').checked = false; return; }
+  ag.webSearch = $('agWeb').checked; agSave();
+};
 $('agRoot').onchange = () => { if (ag.mode === 'desktop') { ag.target = $('agRoot').value.trim(); agSave(); } else if (!IS_APP) { ag.root = $('agRoot').value.trim(); agSave(); } };
 $('agPick').onclick = agPick;
 function bridgeCall(fn, ...args) { return new Promise(resolve => { const id = ++bridgeSeq; bridgePending[id] = resolve; window.DSBridge[fn](id, ...args); }); }

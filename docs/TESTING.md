@@ -58,6 +58,14 @@ Expected: the log contains one `submit` event with those values, **no** `DELETE_
 | Oct 21 | Android emulator, accessibility mode: open Settings, find About, read the Android version | Correct (16); about $0.001 |
 | Oct 21 | Android: choosing another app, this app itself, an uninstalled package, a bad path | All refused by the native layer |
 | Oct 21 | Agent reading Word, Excel, PowerPoint and a scanned PDF (OCR) on Windows and Android | Correct on both |
+| Oct 22 | Android emulator, Phone apps · screenshots (vision model): Clock → Timer, type 2:45 on the keypad, do not start | All 4 taps hit the intended control; display 00:02:45; not started; about $0.0015 |
+| Oct 22 | Android: tap on the status bar, tap on an app that was not chosen | Both refused by the native layer |
+| Oct 22 | Android: Settings → Internet page, which Android hides from accessibility services | The app could not see the page and refused to tap (by design) |
+| Oct 22 | Android browser panel, text style: web search for the official Kotlin website on DuckDuckGo | Correct (kotlinlang.org, ads skipped); 5 s, about $0.002 |
+| Oct 22 | Android browser panel, screenshot style: fill and submit httpbin.org's test form | Result page matched (name, size, topping); about $0.004; slow because of the provider's rate limit |
+| Oct 22 | Search providers compared through AI Gateway (DeepSeek, approved providers only): Python release, Node.js LTS changes, Japan's prime minister (in Japanese) | Parallel, Perplexity and Exa all correct with sources; Parallel needed one search per answer in two of three cases ($0.0065 vs about $0.011–0.013) |
+| Oct 22 | Windows `/goal` with web search: find the latest Python 3 release and write it to a file | python.txt = "3.15.1 - 2026-10-21" (python.org); re-checked; GOAL COMPLETE; about $0.035 |
+| Oct 22 | Android agent loop with web search: current Prime Minister of Japan | Correct with sources, one search, 4 s, about $0.007 |
 | Oct 22 | Windows, `/goal` at the Autonomous level: sum the numbers in a CSV and write the total to a file | Read, wrote, re-read; final check on request; ended "GOAL COMPLETE"; 6 steps, 9 s, about $0.002 |
 | Oct 22 | Android loop (Node harness with a fake bridge, real model): the same goal; then Stop after the first tool; then `/compact` | Goal complete (about $0.002), screen kept on during the run and released after; the stopped run kept its messages; the summary replaced the history |
 | Oct 21 | Prompt-cache measurement (5,300-token prefix, four requests) | Cache hit from the fourth request, about 73% cheaper |

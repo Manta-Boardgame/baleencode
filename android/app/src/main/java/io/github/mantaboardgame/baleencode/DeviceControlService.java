@@ -24,15 +24,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Lets the assistant use ONE app that the user chose, through Android's accessibility interface (the one screen
+ * Lets the assistant use the apps that the user chose, through Android's accessibility interface (the one screen
  * readers use). The user turns this service on in Settings; Android shows its own warning when doing so.
  * Every operation is tied to the chosen app's package: if another app is in front, nothing is read or touched.
- * No taps by coordinates are made; controls are pressed through their accessibility actions.
+ * Two ways to act: through a control's accessibility action (the list mode), or by a tap / swipe at a screen
+ * position (the screenshot mode). A position is only used when it lies on the chosen app's own window.
  */
 public class DeviceControlService extends AccessibilityService {
     static volatile DeviceControlService instance;
     private static final int MAX_ITEMS = 400;
     private static final int MAX_DEPTH = 30;
+    // Size of the full screen in the latest screenshot, to turn screenshot coordinates into screen coordinates
+    private volatile int shotFullW, shotFullH;
 
     @Override
     protected void onServiceConnected() { instance = this; }
@@ -205,12 +208,124 @@ public class DeviceControlService extends AccessibilityService {
         Bitmap b = bitmap.get();
         if (b == null) throw new Exception(error.get() == null ? "No screenshot." : error.get());
         int w = b.getWidth(), h = b.getHeight();
+        shotFullW = w; shotFullH = h;
         float scale = Math.min(1f, 720f / Math.min(w, h));
         if (scale < 1f) b = Bitmap.createScaledBitmap(b, Math.round(w * scale), Math.round(h * scale), true);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         b.compress(Bitmap.CompressFormat.JPEG, 75, out);
         return new JSONObject().put("w", b.getWidth()).put("h", b.getHeight())
                 .put("b64", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)).toString();
+    }
+
+    // ---------- acting by screen position (screenshot mode) ----------
+
+    /** A point of the latest screenshot (w x h pixels) in screen pixels */
+    private int[] toScreen(double x, double y, int w, int h) throws Exception {
+        if (shotFullW <= 0 || w <= 0 || h <= 0) throw new Exception("Take a screenshot first, then use its coordinates.");
+        if (x < 0 || y < 0 || x > w || y > h) throw new Exception("That point is outside the screenshot (" + w + "x" + h + ").");
+        return new int[]{ (int) Math.round(x * shotFullW / w), (int) Math.round(y * shotFullH / h) };
+    }
+
+    /** The window that is on top at this screen point (windows are checked from the top layer down) */
+    private AccessibilityWindowInfo windowAt(int x, int y) {
+        List<AccessibilityWindowInfo> ws = getWindows();
+        if (ws == null) return null;
+        AccessibilityWindowInfo best = null;
+        android.graphics.Rect r = new android.graphics.Rect();
+        for (AccessibilityWindowInfo w : ws) {
+            w.getBoundsInScreen(r);
+            if (r.contains(x, y) && (best == null || w.getLayer() > best.getLayer())) best = w;
+        }
+        return best;
+    }
+
+    /** The chosen app's window at this point, or an error (another app, the keyboard, the system bars) */
+    private AccessibilityNodeInfo appRootAt(String pkg, int x, int y) throws Exception {
+        AccessibilityWindowInfo w = windowAt(x, y);
+        AccessibilityNodeInfo root = w == null ? null : w.getRoot();
+        CharSequence p = root == null ? null : root.getPackageName();
+        if (w == null || w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION || p == null || !pkg.equals(p.toString())) {
+            throw new Exception("That point is not on the chosen app (it is on another app, the keyboard or a system bar). Take a new screenshot.");
+        }
+        return root;
+    }
+
+    private static AccessibilityNodeInfo deepestAt(AccessibilityNodeInfo n, int x, int y, int depth) {
+        android.graphics.Rect r = new android.graphics.Rect();
+        n.getBoundsInScreen(r);
+        if (!r.contains(x, y)) return null;
+        if (depth < MAX_DEPTH) {
+            for (int i = n.getChildCount() - 1; i >= 0; i--) {         // later children are drawn on top
+                AccessibilityNodeInfo c = n.getChild(i);
+                if (c == null || !c.isVisibleToUser()) continue;
+                AccessibilityNodeInfo d = deepestAt(c, x, y, depth + 1);
+                if (d != null) return d;
+            }
+        }
+        return n;
+    }
+
+    /** What lies at a screenshot point: whether it is on the chosen app, and the label of the control there */
+    String probe(String pkg, double x, double y, int w, int h) throws Exception {
+        int[] p = toScreen(x, y, w, h);
+        AccessibilityNodeInfo node = deepestAt(appRootAt(pkg, p[0], p[1]), p[0], p[1], 0);
+        String label = "";
+        boolean password = false, editable = false;
+        for (AccessibilityNodeInfo t = node; t != null && label.isEmpty(); t = t.getParent()) {
+            label = labelOf(t);
+            password |= t.isPassword();
+            editable |= t.isEditable();
+        }
+        return new JSONObject().put("label", label).put("cls", node == null ? "" : simpleClass(node))
+                .put("password", password).put("editable", editable).toString();
+    }
+
+    private void gesture(android.graphics.Path path, long ms) throws Exception {
+        android.accessibilityservice.GestureDescription g = new android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, ms)).build();
+        final CountDownLatch done = new CountDownLatch(1);
+        final boolean[] ok = {false};
+        boolean sent = dispatchGesture(g, new GestureResultCallback() {
+            @Override public void onCompleted(android.accessibilityservice.GestureDescription d) { ok[0] = true; done.countDown(); }
+            @Override public void onCancelled(android.accessibilityservice.GestureDescription d) { done.countDown(); }
+        }, null);
+        if (!sent || !done.await(ms + 3000, TimeUnit.MILLISECONDS) || !ok[0]) throw new Exception("The touch did not go through.");
+    }
+
+    /** Tap (or long-press) at a screenshot point on the chosen app */
+    String tap(String pkg, double x, double y, int w, int h, boolean longPress) throws Exception {
+        int[] p = toScreen(x, y, w, h);
+        appRootAt(pkg, p[0], p[1]);
+        android.graphics.Path path = new android.graphics.Path();
+        path.moveTo(p[0], p[1]);
+        gesture(path, longPress ? 700 : 60);
+        return "ok";
+    }
+
+    /** Swipe between two screenshot points; both ends must be on the chosen app */
+    String swipe(String pkg, double x1, double y1, double x2, double y2, int w, int h, int ms) throws Exception {
+        int[] a = toScreen(x1, y1, w, h), b = toScreen(x2, y2, w, h);
+        appRootAt(pkg, a[0], a[1]);
+        appRootAt(pkg, b[0], b[1]);
+        android.graphics.Path path = new android.graphics.Path();
+        path.moveTo(a[0], a[1]);
+        path.lineTo(b[0], b[1]);
+        gesture(path, Math.min(Math.max(ms, 100), 2000));
+        return "ok";
+    }
+
+    /** Put text into the field that has the input focus in the chosen app. Password fields need allowPassword. */
+    String typeFocused(String pkg, String text, boolean allowPassword) throws Exception {
+        appRoot(pkg);
+        AccessibilityNodeInfo f = findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (f == null || f.getPackageName() == null || !pkg.equals(f.getPackageName().toString()) || !f.isEditable()) {
+            throw new Exception("No text field of the chosen app has the focus. Tap the field first.");
+        }
+        if (f.isPassword() && !allowPassword) throw new Exception("PASSWORD_FIELD");
+        Bundle b = new Bundle();
+        b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
+        if (!f.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b)) throw new Exception("The text could not be entered.");
+        return "ok";
     }
 
     /** Brings the chosen app to the front (only the app the user picked) */

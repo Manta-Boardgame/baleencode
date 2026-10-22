@@ -16,6 +16,9 @@ import org.json.JSONObject;
 final class Providers {
     static final String MODEL = "deepseek/deepseek-v4.1-flash-1017";
     static final String GATEWAY = "https://ai-gateway.vercel.sh";
+    // The screenshot modes use a vision model, allowed only on DeepInfra (US); same fail-closed rule (see providers.mjs)
+    static final String SCREEN_MODEL = "xiaomi/mimo-v2.6-flash";
+    static final String[] SCREEN_PROVIDERS = { "deepinfra" };
 
     /** slug, display name, headquarters */
     private static final String[][] ALLOWED = {

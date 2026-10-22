@@ -2,6 +2,18 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-10-22
+
+### Added
+- **Web search** for the agent (Windows and Android), off until you turn it on. AI Gateway runs Parallel's search (US) and
+  gives the results to the model; only the search words go to Parallel. About $0.005 per search. The provider allowlist for the
+  model itself is unchanged. Chosen after comparing Parallel, Perplexity and Exa on the same questions: all three were
+  accurate, and Parallel usually needed one search per answer instead of two.
+- Android: **Phone apps · screenshots** mode. The vision model taps, long-presses, swipes and types at screen positions through
+  the accessibility gesture interface; points outside the chosen apps are refused, risky or password controls ask first.
+- Android: **browser modes** (text and screenshots) in a panel inside the app: a separate web view with no bridge to the app,
+  https only. This is also how the Android agent searches the web.
+
 ## [1.0.1] - 2026-10-22
 
 ### Changed

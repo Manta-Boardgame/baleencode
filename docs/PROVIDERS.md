@@ -49,6 +49,14 @@ Screenshots of the assistant's own browser window are sent to that provider. The
 the request is processed by a US provider; as with DeepSeek, the allowlist controls where the text is processed, not who
 trained the model.
 
+## Web search (optional)
+
+When you turn on Web search, AI Gateway's `vercel:parallel_search` tool is added to the agent's requests. The gateway sends the
+search words the model writes to Parallel Web Systems (United States), runs the search, and gives the results to the model. Only
+the search words go to Parallel; the model call itself keeps the same allowlist. Parallel's own terms apply to those search words;
+their data-retention terms were not independently checked for this project. Pricing as published by Vercel (checked 2026-10-22):
+$5 per 1,000 searches, up to 10 results each.
+
 ## What this does not cover
 
 The allowlist controls **where your text is processed**. It does not change who made the model, and a US provider may run

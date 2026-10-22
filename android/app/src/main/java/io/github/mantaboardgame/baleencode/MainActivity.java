@@ -16,6 +16,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
+import android.os.SystemClock;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
@@ -28,6 +32,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 
 import androidx.webkit.WebViewAssetLoader;
 
@@ -66,6 +71,8 @@ public class MainActivity extends Activity {
     private static final int MAX_PROMPT_CHARS = 2_000_000;
 
     private WebView webView;
+    // The assistant's own browser for the browser modes: a separate WebView with NO bridge to this app
+    private WebView agentWeb;
     private ValueCallback<Uri[]> filePicked;
     private int folderPickId = -1;
     private PdfRenderer pdfRenderer;
@@ -78,10 +85,18 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         webView = new WebView(this);
+        agentWeb = new WebView(this);
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFFFFFFFF);
-        root.addView(webView);
+        // The assistant's browser takes the upper half while a browser mode is in use, the app the lower half
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.addView(agentWeb, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        column.addView(webView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        agentWeb.setVisibility(View.GONE);
+        root.addView(column);
         setContentView(root);
+        setUpAgentWeb();
 
         // Keep content clear of the status bar, navigation bar and keyboard
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -166,6 +181,55 @@ public class MainActivity extends Activity {
 
         webView.addJavascriptInterface(new Bridge(), "DSBridge");
         webView.loadUrl("https://appassets.androidplatform.net/assets/index.html");
+    }
+
+    /**
+     * The browser the assistant drives. It is an ordinary web view: no JavaScript bridge to this app, no file or
+     * content access, only http/https pages, no pop-up windows; permission requests (camera, location ...) are denied.
+     * It shares no logins with the phone's own browser.
+     */
+    private void setUpAgentWeb() {
+        WebSettings s = agentWeb.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        s.setSupportMultipleWindows(false);
+        s.setGeolocationEnabled(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        agentWeb.setWebChromeClient(new WebChromeClient());
+        agentWeb.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String scheme = request.getUrl().getScheme();
+                return !("https".equals(scheme) || "http".equals(scheme));   // intent:, file:, app links ... are not opened
+            }
+        });
+    }
+
+    private static final Map<String, Integer> KEYS = new java.util.HashMap<>();
+    static {
+        KEYS.put("Enter", KeyEvent.KEYCODE_ENTER); KEYS.put("Tab", KeyEvent.KEYCODE_TAB); KEYS.put("Escape", KeyEvent.KEYCODE_ESCAPE);
+        KEYS.put("Esc", KeyEvent.KEYCODE_ESCAPE); KEYS.put("Backspace", KeyEvent.KEYCODE_DEL); KEYS.put("Delete", KeyEvent.KEYCODE_FORWARD_DEL);
+        KEYS.put("ArrowUp", KeyEvent.KEYCODE_DPAD_UP); KEYS.put("ArrowDown", KeyEvent.KEYCODE_DPAD_DOWN);
+        KEYS.put("ArrowLeft", KeyEvent.KEYCODE_DPAD_LEFT); KEYS.put("ArrowRight", KeyEvent.KEYCODE_DPAD_RIGHT);
+        KEYS.put("PageUp", KeyEvent.KEYCODE_PAGE_UP); KEYS.put("PageDown", KeyEvent.KEYCODE_PAGE_DOWN);
+        KEYS.put("Home", KeyEvent.KEYCODE_MOVE_HOME); KEYS.put("End", KeyEvent.KEYCODE_MOVE_END); KEYS.put("Space", KeyEvent.KEYCODE_SPACE);
+    }
+
+    /** The visible part of the assistant's browser as a JPEG (at most 720 px wide) */
+    private String agentWebShot() throws Exception {
+        int vw = agentWeb.getWidth(), vh = agentWeb.getHeight();
+        if (vw <= 0 || vh <= 0) throw new Exception("The browser panel is not on screen. Open a page first, and keep BaleenCode in front while it works.");
+        Bitmap full = Bitmap.createBitmap(vw, vh, Bitmap.Config.ARGB_8888);
+        agentWeb.draw(new Canvas(full));
+        float scale = Math.min(1f, 720f / vw);
+        Bitmap b = scale < 1f ? Bitmap.createScaledBitmap(full, Math.round(vw * scale), Math.round(vh * scale), true) : full;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        b.compress(Bitmap.CompressFormat.JPEG, 75, out);
+        float d = getResources().getDisplayMetrics().density;
+        return new JSONObject().put("w", b.getWidth()).put("h", b.getHeight()).put("cssW", vw / d).put("cssH", vh / d)
+                .put("b64", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)).toString();
     }
 
     @Override
@@ -379,14 +443,24 @@ public class MainActivity extends Activity {
                     String effort = in.optString("effort", "none");
                     if (!effort.matches("none|low|high|max")) effort = "none";
 
+                    // The screenshot modes use the vision model, only on its own provider; everything else the usual allowlist
+                    boolean vision = in.optBoolean("vision", false);
+                    JSONArray only = new JSONArray();
+                    if (vision) { for (String p : Providers.SCREEN_PROVIDERS) only.put(p); } else only = Providers.allowedSlugs();
+
+                    // Web search (opt-in): AI Gateway runs Parallel's search (US) and hands the results to the model
+                    if (in.optBoolean("webSearch", false)) {
+                        if (tools == null) tools = new JSONArray();
+                        tools.put(new JSONObject().put("type", "vercel:parallel_search").put("config", new JSONObject().put("max_results", 5)));
+                    }
+
                     JSONObject payload = new JSONObject();
-                    payload.put("model", Providers.MODEL);
+                    payload.put("model", vision ? Providers.SCREEN_MODEL : Providers.MODEL);
                     payload.put("messages", messages);
                     if (tools != null && tools.length() > 0) { payload.put("tools", tools); payload.put("tool_choice", "auto"); }
                     payload.put("max_tokens", 8192);
                     payload.put("reasoning", new JSONObject().put("effort", effort));
-                    payload.put("providerOptions", new JSONObject().put("gateway",
-                            new JSONObject().put("only", Providers.allowedSlugs())));
+                    payload.put("providerOptions", new JSONObject().put("gateway", new JSONObject().put("only", only)));
 
                     c = (HttpURLConnection) new URL(Providers.GATEWAY + "/v1/chat/completions").openConnection();
                     c.setRequestMethod("POST");
@@ -464,6 +538,76 @@ public class MainActivity extends Activity {
             });
         }
 
+        // ---------- the assistant's own browser (see setUpAgentWeb) ----------
+
+        /** show / navigate / eval / state / back / shot / tap / key: always on the assistant's browser, never on this page */
+        @JavascriptInterface
+        public void browserOp(int id, String json) {
+            main.post(() -> {
+                try {
+                    JSONObject a = new JSONObject(json);
+                    switch (a.getString("op")) {
+                        case "show":
+                            agentWeb.setVisibility(a.optBoolean("on", false) ? View.VISIBLE : View.GONE);
+                            deliver(id, 200, "ok");
+                            break;
+                        case "navigate": {
+                            Uri u = Uri.parse(a.getString("url"));
+                            if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) throw new Exception("Only http and https addresses can be opened.");
+                            agentWeb.setVisibility(View.VISIBLE);
+                            agentWeb.loadUrl(u.toString());
+                            deliver(id, 200, "ok");
+                            break;
+                        }
+                        case "eval":
+                            agentWeb.evaluateJavascript(a.getString("script"), v -> deliver(id, 200, v == null ? "null" : v));
+                            break;
+                        case "state":
+                            deliver(id, 200, new JSONObject().put("url", agentWeb.getUrl() == null ? "" : agentWeb.getUrl())
+                                    .put("title", agentWeb.getTitle() == null ? "" : agentWeb.getTitle()).put("progress", agentWeb.getProgress())
+                                    .put("canGoBack", agentWeb.canGoBack()).put("visible", agentWeb.getVisibility() == View.VISIBLE).toString());
+                            break;
+                        case "back":
+                            if (!agentWeb.canGoBack()) throw new Exception("There is no previous page.");
+                            agentWeb.goBack();
+                            deliver(id, 200, "ok");
+                            break;
+                        case "shot":
+                            deliver(id, 200, agentWebShot());
+                            break;
+                        case "tap": {
+                            // x, y are page (CSS) pixels of the visible area
+                            float d = getResources().getDisplayMetrics().density;
+                            float x = (float) a.getDouble("x") * d, y = (float) a.getDouble("y") * d;
+                            if (x < 0 || y < 0 || x > agentWeb.getWidth() || y > agentWeb.getHeight()) throw new Exception("That point is outside the page.");
+                            long t = SystemClock.uptimeMillis();
+                            MotionEvent down = MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, x, y, 0);
+                            MotionEvent up = MotionEvent.obtain(t, t + (a.optBoolean("long", false) ? 700 : 60), MotionEvent.ACTION_UP, x, y, 0);
+                            agentWeb.dispatchTouchEvent(down);
+                            agentWeb.dispatchTouchEvent(up);
+                            down.recycle();
+                            up.recycle();
+                            deliver(id, 200, "ok");
+                            break;
+                        }
+                        case "key": {
+                            Integer code = KEYS.get(a.getString("key"));
+                            if (code == null) throw new Exception("Unknown key. Use Enter, Tab, Escape, Backspace, Delete, arrows, PageUp, PageDown, Home, End or Space.");
+                            agentWeb.requestFocus();
+                            agentWeb.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, code));
+                            agentWeb.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, code));
+                            deliver(id, 200, "ok");
+                            break;
+                        }
+                        default:
+                            throw new Exception("Unknown operation.");
+                    }
+                } catch (Exception e) {
+                    deliver(id, 400, String.valueOf(e.getMessage()));
+                }
+            });
+        }
+
         // ---------- device control (see DeviceControlService) ----------
 
         /** "running" when the user has turned the accessibility service on, otherwise "off" */
@@ -507,6 +651,11 @@ public class MainActivity extends Activity {
                         case "act": out = s.act(pkg, a.optString("path", ""), a.optString("expect", ""), a.getString("action"),
                                 a.optString("text", ""), a.optInt("amount", 3)); break;
                         case "shot": out = s.screenshot(pkg); break;
+                        case "probe": out = s.probe(pkg, a.getDouble("x"), a.getDouble("y"), a.getInt("w"), a.getInt("h")); break;
+                        case "tap": out = s.tap(pkg, a.getDouble("x"), a.getDouble("y"), a.getInt("w"), a.getInt("h"), a.optBoolean("long", false)); break;
+                        case "swipe": out = s.swipe(pkg, a.getDouble("x1"), a.getDouble("y1"), a.getDouble("x2"), a.getDouble("y2"),
+                                a.getInt("w"), a.getInt("h"), a.optInt("ms", 400)); break;
+                        case "typefocused": out = s.typeFocused(pkg, a.getString("text"), a.optBoolean("allowPassword", false)); break;
                         case "open": DeviceControlService.openApp(MainActivity.this, pkg); out = "ok"; break;
                         default: throw new Exception("Unknown operation.");
                     }

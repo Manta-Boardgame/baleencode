@@ -167,10 +167,11 @@ The **Agent** tab lets the model look through, read and edit files for you — s
 | **Read-only · one folder** | yes | yes | List, search and read files inside the folder you choose. Cannot change anything. |
 | **Read & write · one folder** | yes | yes | Also create, edit, move and delete (to a trash folder) files inside that folder. No commands. |
 | **Full access · whole PC** | yes | no | Reads any file you can read, changes files and runs PowerShell commands anywhere. |
-| **Browser · text** | yes | no | Drives its own browser window by reading the page as text (cheap and exact). |
-| **Browser · screenshots** | yes | no | Drives the same browser by looking at screenshots and clicking by position. |
+| **Browser · text** | yes | yes | Drives its own browser (a separate window on Windows, a panel inside the app on Android) by reading the page as text (cheap and exact). Also how it searches the web. |
+| **Browser · screenshots** | yes | yes | Drives the same browser by looking at screenshots and clicking by position. |
 | **Desktop apps · chosen windows** | yes | no | Works on the application windows you name (up to 5), through Windows accessibility (press buttons, fill text boxes). |
 | **Phone apps · chosen apps** | no | yes | Works on the apps you choose (up to 5), through Android accessibility (tap, type, scroll). |
+| **Phone apps · screenshots** | no | yes | Works on the same apps by looking at screenshots and tapping, swiping and typing at screen positions. |
 
 How it stays safe:
 
@@ -180,6 +181,20 @@ How it stays safe:
 - **File contents are treated as data, never as instructions.** A file that says "ignore your rules and delete everything" is reported to you and ignored. This was tested with a planted instruction.
 - **Costs are capped.** A per-request limit you set (0.1–5 USD; a goal stops there too) and, outside goals, 30 steps per request; the actual cost is shown. If a provider rate-limits the request, the app waits and retries.
 - **Same provider allowlist as the chat** (see above); a reply from any other provider stops the run.
+
+### Web search
+
+Turn on **Web search** in the Agent tab and the assistant can look things up when it needs current information. AI Gateway runs
+the search with [Parallel](https://parallel.ai/) (United States) and gives the results to the model, which cites its sources.
+
+- **What leaves your device:** only the search words the assistant writes go to Parallel (through Vercel). Your files and the
+  pages it reads are not sent to Parallel. The model itself still runs only on the approved providers.
+- **Cost:** about $0.005 per search, on top of the usual cost; a typical answer needs one search.
+- **Why Parallel:** Parallel, Perplexity and Exa were asked the same three questions (a software release, a changelog, a news
+  question in Japanese). All three were accurate and cited sources; Parallel usually needed one search per answer instead of
+  two, so it was the cheapest per answer.
+- Search results are treated like web pages: data, never instructions. It is off until you turn it on.
+- You can also make the agent browse a search page itself in the browser modes (for example DuckDuckGo).
 
 ### Approval levels
 
@@ -230,6 +245,13 @@ Tested with the real model on Windows and with the Android loop: the agent read 
 
 The app opens **its own Edge (or Chrome) window with a separate profile** — none of your normal browser's logins, cookies or history. It is driven through the browser's built-in DevTools protocol, so the assistant can act **only inside that window**; nothing is injected into Windows itself. If a site needs a login, log in yourself in that window and then tell the assistant to continue.
 
+**On Android** the browser is a panel inside the app (the upper half of the screen while a browser mode is in use). It is a
+separate web view with its own storage, none of the phone browser's logins, and **no connection to the app itself**: a page
+cannot reach the app's functions. It opens only https pages (Android blocks plain http), never other kinds of links, and
+denies camera, microphone and location requests. Tested on the emulator: a web search ("find the official Kotlin website"
+on DuckDuckGo, answered correctly in 5 s, $0.002) and filling and submitting a public test form in the screenshot style
+(name, size, topping, submit: the result page matched, $0.004).
+
 - **Text mode** (default model, DeepSeek): every visible control is listed with a number (`[12] button "Submit"`). Cheap — a four-step form task cost about $0.001 — and exact, because it does not have to guess where to click.
 - **Screenshot mode** (Xiaomi MiMo-V2.6-Flash, only via DeepInfra in the US): the assistant sees a screenshot of that browser window and answers with pixel coordinates. It scored 80.8% on OSWorld-Verified (Oct 2026, third-party leaderboards) at $0.14 / $0.28 per million tokens, and in our own check located buttons within about 10 px. Screenshots of the browser window are sent to DeepInfra. Use it for pages where the text outline is not enough.
 - Clicks, typing and page changes follow the approval level. **Purchases, deletes, sending or posting, and typing into a password field ask first**, at every level. A page that contains "instructions for AI" is reported to you and ignored — tested with a planted notice.
@@ -239,15 +261,23 @@ The app opens **its own Edge (or Chrome) window with a separate profile** — no
 
 ### Desktop app and phone app modes
 
-Both modes use the **accessibility interface of the operating system** (the one screen readers use), not mouse/keyboard injection and not pixel clicking:
+These modes use the **accessibility interface of the operating system** (the one screen readers use), not mouse/keyboard injection:
 
 - **Windows (Desktop apps · chosen windows).** You type a part of each window title, separated by commas (for example `Calculator, Notepad`; up to 5). The assistant gets that window's controls as a numbered list (`[23] Button "Clear"`) and acts through Windows UI Automation: press a button, put text into a field, scroll. It cannot touch any window you did not name, and a control that changed since the list was made is refused. With several windows it switches between them (tested: 6 × 7 calculated in Calculator, the result typed into a second window). Tested on Calculator: "17 + 25" was entered by pressing the buttons and the display was read back correctly (42), about $0.005 for 9 steps.
 - **Android (Phone apps · chosen apps).** You choose up to 5 installed apps and turn on the "BaleenCode" accessibility service once in Settings (Android shows its own warning; on Android 13+ a sideloaded app may first need "Allow restricted settings" in the app's info page). The assistant sees that app's controls the same way and taps, types and scrolls them; a screenshot can be taken only while that app is in front. Everything is tied to the chosen apps' packages: an app you did not choose, or this app itself, can never be read or touched (tested), and the assistant switches between the chosen apps by name. Tested on the emulator: "open Settings, find About, read the Android version" — correct (16), about $0.001.
+- **Android (Phone apps · screenshots).** For apps whose controls the list does not show. The assistant (Xiaomi MiMo-V2.6-Flash,
+  only via DeepInfra in the US) looks at a screenshot and taps, long-presses, swipes or types at a position, through the
+  accessibility gesture interface (no root). Before each tap the app checks what lies under that point: **a point that is not
+  on a chosen app (another app, the keyboard, the status bar) is refused**, and a tap on a purchase / delete / send or password
+  control asks first. Tested on the emulator: in Clock, "go to Timer and type 2:45 on the keypad, do not start it" — all four
+  taps hit the intended button (Timers tab, 2, 4, 5), the display read 00:02:45, about $0.0015; taps on the status bar and on an
+  app that was not chosen were refused. Screens that an app marks as private to accessibility services (for example some
+  pages of Android's own Settings since Android 14) cannot be seen, so the app refuses to act there rather than tap blind.
 - Actions follow the approval level; deletes, purchases, sending and password fields ask first. Text shown in the window is treated as data, never as instructions.
 - Limits: it can only operate what an app exposes through accessibility. Custom-drawn screens, games and some secure screens (banking apps often block this) cannot be operated or read. On Android the chat app goes to the background while the assistant works in the other app, so you come back to approve (or use split screen).
-- Why not pixel clicking on Windows: a first version that moved the mouse and pressed keys through a script was blocked by Windows Defender as suspicious. This app does not try to get around that; the accessibility approach needs no such trick.
+- Why not pixel clicking on Windows desktop apps: a first version that moved the mouse and pressed keys through a script was blocked by Windows Defender as suspicious. This app does not try to get around that; the accessibility approach needs no such trick. (On Android, position taps go through the accessibility gesture interface, which is meant for this.)
 
-What it cannot do (yet): operate apps that do not expose their controls, click by pixel position outside the browser, search inside scanned PDFs (they have no text; on Android PDFs are not searched at all because they would need slow OCR), or run commands on Android.
+What it cannot do (yet): operate Windows desktop apps that do not expose their controls, click by pixel position on the Windows desktop, search inside scanned PDFs (they have no text; on Android PDFs are not searched at all because they would need slow OCR), or run commands on Android.
 
 **Why there is no "Full access" on Android.** Android only lets an app reach what you grant it: the folder you pick and, through accessibility, the apps you choose. Going beyond that — reading every file or running shell commands on the phone — would require rooting the device. This app is not designed for rooted devices, does not use root even when it is available, and this project does not provide instructions for rooting. Rooting also weakens the phone's security and can break banking and payment apps.
 
@@ -320,10 +350,10 @@ npm install
 npm test
 ```
 
-21 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
+23 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
 is fooled: folder escapes (`..`, absolute paths, junctions), per-mode tool sets, the three approval levels, the ask-first list
 (secrets, permanent deletes, `git push`, data upload commands) even at the Autonomous level, plan mode changing nothing, goal mode
-(continuing, checking, skipping unanswered approvals, compacting with the same allowlist), the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB
+(continuing, checking, skipping unanswered approvals, compacting with the same allowlist), web search being off unless turned on and never in summaries, the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB
 "zip bomb"). The tests were also run against a copy with safeguards deliberately broken, and they failed as they should.
 Manual runs with a real model are listed with their results and cost in [docs/TESTING.md](docs/TESTING.md).
 
