@@ -444,48 +444,21 @@
   const VISION = new Set(['screen', 'devicescreen']);      // these modes use the vision model (on its own provider)
   // ---- web_fetch: reads one public page (only while web search is on); the native side refuses private addresses ----
   const FETCH_PAGE_CHARS = 15000;
-  const BLOCKED_TLD = /\.(cn|xn--fiqs8s|xn--fiqz9s|中国|中國)\.?$/i;
   function checkUrl(raw) {
     let u;
     try { u = new URL(String(raw).trim()); } catch { throw new Error('That is not a valid web address.'); }
     if (!['http:', 'https:'].includes(u.protocol)) throw new Error('Only http and https pages can be read.');
     if (u.username || u.password) throw new Error('Addresses with a user name or password are not read.');
-    const host = u.hostname.replace(/^\[|\]$/g, '');
-    if (!host || host === 'localhost' || /\.(localhost|local|internal)$/i.test(host)) throw new Error('Only public web pages can be read.');
-    if (BLOCKED_TLD.test(host)) throw new Error('Sites under China\'s country domains are not read by this app.');
+    const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();   // "localhost." is localhost too
+    if (!host || host === 'localhost' || /\.(localhost|local|internal|home\.arpa)$/i.test(host)) throw new Error('Only public web pages can be read.');
     if (u.href.length > 2000) throw new Error('That address is too long.');
     u.hash = '';
     return u;
   }
   // Long addresses could carry data out (a page could tell the model to put a file into one), so those ask first
   const LONG_URL = (u) => u.search.length > 120 || u.href.length > 300;
-  const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', copy: '©', reg: '®', hellip: '…', mdash: '—', ndash: '–', laquo: '«', raquo: '»', yen: '¥', middot: '·' };
-  /** Page HTML to readable text (the same rules as the desktop app) */
-  function htmlToText(html) {
-    let s = String(html);
-    const title = (s.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '').trim();
-    s = s.replace(/<!--[\s\S]*?-->/g, ' ');
-    const main = s.match(/<main\b[\s\S]*<\/main>/i)?.[0] ?? s.match(/<article\b[\s\S]*<\/article>/i)?.[0];
-    if (main && main.length > 500) s = main;
-    s = s
-      .replace(/<(script|style|noscript|svg|template|iframe|head)\b[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<(nav|footer)\b[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<li\b[^>]*>/gi, '\n- ')
-      .replace(/<h([1-6])\b[^>]*>/gi, (_m, n) => '\n\n' + '#'.repeat(Number(n)) + ' ')
-      .replace(/<\/(p|div|section|article|h[1-6]|li|ul|ol|table|tr|blockquote|pre|header|main|dd|dt)>/gi, '\n')
-      .replace(/<(td|th)\b[^>]*>/gi, ' | ')
-      .replace(/<[\/!]?[a-z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/gi, '')
-      .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
-        if (e[0] === '#') { const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); try { return String.fromCodePoint(n); } catch { return m; } }
-        return ENT[e.toLowerCase()] ?? m;
-      })
-      .replace(/[ \t ]+/g, ' ')
-      .replace(/ *\n */g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    return (title ? `# ${title}\n\n` : '') + s;
-  }
+  // Page HTML to readable text: public/htmltext.js, shared with the desktop app (loaded before this file)
+  const htmlToText = (html) => window.BaleenHtml.htmlToText(html);
   const W = {
     web_fetch: { kind: 'read', style: 'both',
       def: { description: `Read the text of one public web page by its address (http or https): a page found with parallel_search, or an address the user gave. Returns about ${FETCH_PAGE_CHARS} characters per call; use "offset" to read further. Do not put private details from files or the conversation into the address.`,

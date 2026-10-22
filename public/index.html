@@ -341,6 +341,7 @@
 
 <script src="markdown.js"></script>
 <script src="i18n.js"></script>
+<script src="htmltext.js"></script>
 <script src="agent-android.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -916,6 +917,7 @@ $('chatWeb').checked = chatWeb;
 function confirmWebSearch(){
   return confirm('Web search lets the assistant look things up on the web when it needs to.\n'
     + 'The search words it writes are sent through Vercel to Parallel (United States), which runs the search. Your files and pages are not sent, only the search words.\n'
+    + 'It can also read web pages (and pages whose addresses you paste into Chat); those are opened from this device, like a browser, and the site receives only the page address.\n'
     + 'Each search costs about $0.005, on top of the usual cost.\n'
     + 'Turn web search on?');
 }

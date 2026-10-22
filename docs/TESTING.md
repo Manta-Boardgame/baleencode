@@ -30,13 +30,24 @@ deterministic. They check the part that must hold *even if the AI is fooled*: li
 | Goal mode continues after an answer without tools, asks for a final check, and ends on "GOAL COMPLETE" | Long runs end only on a clear verdict |
 | Goal mode: an approval nobody answers is skipped and not granted | Being away never grants anything |
 | Goal mode compacts a large context with a summary request that carries the same provider allowlist | Compaction does not leak to other providers |
-| Every request carries the provider allowlist; screen mode is limited to its own provider | Requests cannot reach China |
+| Every request carries the provider allowlist; screen mode is limited to its own provider | Model requests cannot reach a provider in China |
+| Each request tells the model whether web search is on right now; the note is not stored in the history | An earlier "I cannot search" in the conversation does not override the setting |
+| `web_fetch` exists only with web search on; private addresses and non-http(s) are refused; a long address asks first | Page reading cannot reach this device or the local network, and data in addresses needs approval |
+| After 12 searches in a request the search tool is removed and the model is told so; page reading still works | A request cannot run up search costs |
+| A tool call written as text is not shown as the answer; the model is asked again | Search replies do not end in raw markup |
+| The thinking setting follows the user's choice | Effort is what the user picked |
+| Address checks: loopback, private, link-local, CGNAT, multicast, IPv4-mapped IPv6, `2130706433`, `0x7f.1`, `localhost.`, `.local`, `.home.arpa` | Tricks that point at this machine are refused before connecting |
+| HTML to text keeps headings, lists, tables; drops scripts, styles, menus; decodes entities; keeps only `<main>` when present | Pages read cleanly |
+| Eight hostile pages (thousands of unclosed tags, 1.5 M "<" characters …) are converted in under 3 s in total | A page cannot stall the app (the old converter took 20 s for 450 KB) |
+| Every script `index.html` loads is copied into the Android app | A forgotten file cannot leave the Android app blank again |
 | A reply from a provider outside the list stops the run | The answer is checked too |
 | An Office file expanding to 200 MB is refused; a normal Word file is read | Parser limits work without breaking normal use |
 | Purchase/delete button labels are flagged as risky; ordinary ones are not | Risky-click detection |
 
 The tests were also run against a copy with three safeguards deliberately broken (containment check, delete approval, secret
-detection); five tests failed as they should, which is how we know they are not vacuous.
+detection); five tests failed as they should, which is how we know they are not vacuous. The same was done for the 1.4 safeguards
+(private-address check, per-request search note, search limit, script removal in the HTML converter, page reading only
+with search on, approval for long addresses): each of the six breaks made 1–3 tests fail.
 
 ## Manual, with a real model
 
@@ -66,7 +77,7 @@ Expected: the log contains one `submit` event with those values, **no** `DELETE_
 | Oct 23 | Agent with web search on, in a conversation that already held three "I have no search tool" replies (the user's report), Android loop with the native request rules | Before: answered from the old replies without searching (on the phone). After: searched at once, read six php.net / GitHub pages, wrote the report once — $0.054, 46 s (before the step-memory rule: 6 rewrites, stopped at the $0.30 limit after 400 s) |
 | Oct 23 | Same on Windows through the app server (Node.js LTS question) | 1 search, 3 pages read (nodejs.org), file written once; $0.015 |
 | Oct 23 | Installed 1.4.0 over 1.3.0 on a Nothing Phone (3a), Android 15 | Old conversation kept as the first tab; agent searched (1) and read php.net natively; live status showed tokens and $0.0139 |
-| Oct 23 | Page reader refusals | 127.0.0.1, localhost, 192.168.x, file://, a .cn site: all refused; php.net, Wikipedia: text extracted (main content only) |
+| Oct 23 | Page reader refusals | 127.0.0.1, localhost, 192.168.x, file://: all refused; php.net, Wikipedia: text extracted (main content only) |
 | Oct 23 | Search accuracy, SimpleQA Verified (20 random questions): first setup vs. 10 results + longer excerpts + search rules + low reasoning | 19/20 → 20/20; $0.0081 → $0.0077 per answer; 8.5 s → 6.5 s |
 | Oct 23 | Same with a page-fetch tool added | 20/20, but one long page cost $0.25; not adopted |
 | Oct 23 | Current-news questions (Nobel prizes 2026, World Cup final, Python / Node.js releases, Japan's PM, a model's price, a not-yet-played World Series) with the adopted setup | 10/10; "latest" questions now pick the newest release |

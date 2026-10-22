@@ -107,7 +107,7 @@ Zero data retention and no-training are the flags Vercel reports for each provid
 independently audited. How to re-check them, and why each refused provider is refused: [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 To change the list, edit [`providers.mjs`](providers.mjs) (Windows) and
-[`Providers.java`](android/app/src/main/java/com/deepseek/chat/Providers.java) (Android), then rebuild.
+[`Providers.java`](android/app/src/main/java/io/github/mantaboardgame/baleencode/Providers.java) (Android), then rebuild.
 
 **What this does and does not cover.** The model's *weights* were made by DeepSeek in China; running
 them on a US provider does not change that. The allowlist controls **where your text is processed**,
@@ -198,8 +198,8 @@ which cites its sources. The model is also told your local date, time and time z
 - You can also make the agent browse a search page itself in the browser modes (for example DuckDuckGo).
 - **Reading pages:** with Web search on, the agent can read the full text of a page (a search result, or an address you gave),
   and in Chat the pages whose addresses you paste are read. Pages are fetched directly from your device, never through a
-  third party: public addresses only (not this device or the local network), GET only, no cookies, at most 3 MB; sites under
-  China's country domains are refused, and a long address (which could carry data out) asks you first.
+  third party: public addresses only (not this device or the local network), GET only, no cookies, at most 3 MB; a long
+  address (which could carry data out) asks you first. Only the page address goes to the site, as in any browser.
 - Each request tells the model whether search is on right now, so an earlier "I cannot search" in the conversation does not
   stick. A request stops searching after 12 searches (60 in goal mode).
 
@@ -372,10 +372,10 @@ npm install
 npm test
 ```
 
-27 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
+36 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
 is fooled: folder escapes (`..`, absolute paths, junctions), per-mode tool sets, the three approval levels, the ask-first list
 (secrets, permanent deletes, `git push`, data upload commands) even at the Autonomous level, plan mode changing nothing, goal mode
-(continuing, checking, skipping unanswered approvals, compacting with the same allowlist), web search being off unless turned on and never in summaries, the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB
+(continuing, checking, skipping unanswered approvals, compacting with the same allowlist), web search being off unless turned on and never in summaries, the per-request search setting and search limit, the page reader refusing private addresses (including tricks such as `http://2130706433/` or `localhost.`) and staying fast on hostile pages, the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB
 "zip bomb"). The tests were also run against a copy with safeguards deliberately broken, and they failed as they should.
 Manual runs with a real model are listed with their results and cost in [docs/TESTING.md](docs/TESTING.md).
 

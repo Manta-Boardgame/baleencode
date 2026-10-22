@@ -15,16 +15,21 @@ import { ALLOWED_PROVIDERS, SCREEN_PROVIDERS } from '../providers.mjs';
 
 const ALLOWED = ALLOWED_PROVIDERS.map(p => p.slug);
 
-/** Replace the gateway with a script: each entry is a list of tool calls, or a string for the final answer. */
+/**
+ * Replace the gateway with a script: each entry is a list of tool calls, or a string for the final answer, or
+ * { calls | text, searches } when the step should also report searches the gateway ran.
+ */
 function scriptModel(steps, { provider = 'fireworks', captured = [] } = {}) {
   let i = 0;
   globalThis.fetch = async (_url, opts) => {
     captured.push(JSON.parse(opts.body));
-    const step = steps[Math.min(i++, steps.length - 1)];
+    let step = steps[Math.min(i++, steps.length - 1)];
+    let searches = 0;
+    if (step && typeof step === 'object' && !Array.isArray(step)) { searches = step.searches ?? 0; step = step.calls ?? step.text; }
     const message = typeof step === 'string'
       ? { role: 'assistant', content: step }
       : { role: 'assistant', content: null, tool_calls: step.map((c, n) => ({ id: `c${i}_${n}`, type: 'function', function: { name: c[0], arguments: JSON.stringify(c[1]) } })) };
-    message.provider_metadata = { gateway: { cost: '0', routing: { finalProvider: provider } } };
+    message.provider_metadata = { gateway: { cost: '0', routing: { finalProvider: provider }, ...(searches ? { gatewayToolCalls: { parallel_search: searches } } : {}) } };
     return new Response(JSON.stringify({ choices: [{ message }], usage: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   return captured;
@@ -350,16 +355,14 @@ test('web_fetch is offered only with web search on, refuses private addresses an
     const on = [];
     const r = await run({ mode: 'read', root: s.work, webSearch: true }, [[
       ['web_fetch', { url: 'http://127.0.0.1:4141/api/usage' }], ['web_fetch', { url: 'http://192.168.1.1/' }],
-      ['web_fetch', { url: 'file:///C:/Windows/win.ini' }], ['web_fetch', { url: 'https://www.example.cn/' }],
-      ['web_fetch', { url: 'https://example.com/?q=' + 'a'.repeat(300) }]], 'done'], { captured: on });
+      ['web_fetch', { url: 'file:///C:/Windows/win.ini' }], ['web_fetch', { url: 'https://example.com/?q=' + 'a'.repeat(300) }]], 'done'], { captured: on });
     assert.ok(on[0].tools.some(t => t.function?.name === 'web_fetch'));
     assert.match(r.results[0], /Only public web pages/);
     assert.match(r.results[1], /Only public web pages/);
     assert.match(r.results[2], /Only http and https/);
-    assert.match(r.results[3], /China/);
     assert.equal(r.asked.length, 1);                       // the long address asked first (and was denied here)
     assert.equal(r.asked[0].hard, true);
-    assert.match(r.results[4], /denied/);
+    assert.match(r.results[3], /denied/);
   } finally { s.done(); }
 });
 
@@ -382,5 +385,19 @@ test('the thinking effort follows the user\'s choice; "auto" is none, or low wit
       await run({ mode: 'read', root: s.work, ...body }, ['done'], { captured: c });
       assert.equal(c[0].reasoning.effort, want, JSON.stringify(body));
     }
+  } finally { s.done(); }
+});
+
+test('a request stops searching after its search limit, says so to the model, and keeps reading pages', async () => {
+  const s = sandbox();
+  try {
+    const captured = [];
+    await run({ mode: 'read', root: s.work, webSearch: true }, [
+      { calls: [['list_dir', { path: '.' }]], searches: 8 }, { calls: [['list_dir', { path: '.' }]], searches: 4 }, 'done'], { captured });
+    const has = (req, name) => (req.tools ?? []).some(t => t.type === name || t.function?.name === name);
+    assert.ok(has(captured[0], 'vercel:parallel_search') && has(captured[1], 'vercel:parallel_search'));
+    assert.ok(!has(captured[2], 'vercel:parallel_search'), 'no search tool after 12 searches');
+    assert.ok(has(captured[2], 'web_fetch'));
+    assert.match(captured[2].messages.find(m => m.role === 'user' && /App note/.test(m.content)).content, /limit .* reached/);
   } finally { s.done(); }
 });

@@ -1,24 +1,32 @@
-// Reads one web page for the agent (the web_fetch tool), directly from this PC.
+// Reads one web page for the agent (the web_fetch tool) and for pages pasted into Chat, directly from this PC.
 //
 // Safety rules:
 //   - http(s) only, GET only, no cookies, no login data; at most 5 redirects, each checked again.
 //   - Only public internet addresses: names that resolve to this PC, the local network or other private ranges are refused
 //     (checked on the address actually connected to, so a name cannot switch to a private address afterwards).
-//   - Sites under China's country domains (.cn / .中国 / .中國) are refused, like the rest of the app keeps data away from China.
-//   - At most 3 MB is downloaded; the text sent back to the model is cut to a page of characters.
+//   - At most 3 MB is downloaded (counted after decompression), and the whole read stops after 30 seconds.
+//   - The text sent back to the model is cut to a page of characters and marked as untrusted data.
 //   - Long addresses could carry private data out (a page could tell the model to put a file into one), so the tool asks
-//     first for those (see LONG_URL in prepare).
+//     first for those (see LONG_URL).
 import http from 'node:http';
 import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
+import zlib from 'node:zlib';
+import fs from 'node:fs';
+import vm from 'node:vm';
 
 export const FETCH_PAGE_CHARS = 15_000;
 const MAX_BYTES = 3 * 1024 * 1024;
-const TIMEOUT_MS = 20_000;
-export const BLOCKED_TLD = /\.(cn|xn--fiqs8s|xn--fiqz9s|中国|中國)\.?$/i;
+const DEADLINE_MS = 30_000;
+const MAX_REDIRECTS = 5;
 
-/** True for loopback, private, link-local, carrier-grade NAT, multicast and other non-public addresses */
+// The HTML-to-text converter is shared with the Android version (public/htmltext.js, a plain browser script)
+const sandbox = {};
+vm.runInNewContext(fs.readFileSync(new URL('./public/htmltext.js', import.meta.url), 'utf8'), sandbox);
+export const { htmlToText } = sandbox.BaleenHtml;
+
+/** True for loopback, private, link-local, carrier-grade NAT, benchmark, multicast and other non-public addresses */
 export function isPrivateAddress(ip) {
   if (net.isIPv4(ip)) {
     const [a, b] = ip.split('.').map(Number);
@@ -26,9 +34,11 @@ export function isPrivateAddress(ip) {
       || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19))
       || a >= 224;
   }
+  if (!net.isIPv6(ip)) return true;                  // not an address at all: never treat it as public
   const v = ip.toLowerCase();
-  if (v.startsWith('::ffff:')) return isPrivateAddress(v.slice(7));
-  return v === '::' || v === '::1' || /^f[cd]/.test(v) || /^fe[89ab]/.test(v) || v.startsWith('ff');
+  const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isPrivateAddress(mapped[1]);
+  return v === '::' || v === '::1' || v.startsWith('::ffff:') || /^f[cd]/.test(v) || /^fe[89ab]/.test(v) || v.startsWith('ff');
 }
 
 /** Checks an address before anything is sent; returns the URL object or throws with a reason the model can read */
@@ -37,10 +47,9 @@ export function checkUrl(raw) {
   try { u = new URL(String(raw).trim()); } catch { throw new Error('That is not a valid web address.'); }
   if (!['http:', 'https:'].includes(u.protocol)) throw new Error('Only http and https pages can be read.');
   if (u.username || u.password) throw new Error('Addresses with a user name or password are not read.');
-  const host = u.hostname.replace(/^\[|\]$/g, '');
-  if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) throw new Error('Only public web pages can be read.');
+  const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();   // "localhost." is localhost too
+  if (!host || host === 'localhost' || /\.(localhost|local|internal|home\.arpa)$/i.test(host)) throw new Error('Only public web pages can be read.');
   if (net.isIP(host) && isPrivateAddress(host)) throw new Error('Only public web pages can be read.');
-  if (BLOCKED_TLD.test(host)) throw new Error('Sites under China\'s country domains are not read by this app.');
   if (u.href.length > 2000) throw new Error('That address is too long.');
   u.hash = '';
   return u;
@@ -53,74 +62,64 @@ function safeLookup(hostname, options, cb) {
   dns.lookup(hostname, { ...options, all: true }, (err, list) => {
     if (err) return cb(err);
     const ok = list.filter(a => !isPrivateAddress(a.address));
-    if (!ok.length) return cb(new Error('Only public web pages can be read.'));
+    if (ok.length !== list.length || !ok.length) return cb(new Error('Only public web pages can be read.'));
     if (options.all) return cb(null, ok);
     cb(null, ok[0].address, ok[0].family);
   });
 }
 
-function getOnce(u) {
+/** One GET; resolves with { redirect } or { status, headers, body, cut }. `deadline` is an absolute time in ms. */
+function getOnce(u, deadline) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); fn(v); } };
     const lib = u.protocol === 'https:' ? https : http;
     const req = lib.get(u, {
       lookup: safeLookup,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BaleenCode web_fetch)', Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5',
-        'Accept-Language': 'ja,en;q=0.8' },
-      timeout: TIMEOUT_MS,
+        'Accept-Language': 'ja,en;q=0.8', 'Accept-Encoding': 'gzip, deflate, br' },
     }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400) {
+        res.resume();
+        if (!res.headers.location) return finish(reject, new Error(`The site answered with HTTP ${res.statusCode} and no new address.`));
+        return finish(resolve, { redirect: res.headers.location });
+      }
+      // Compressed pages are unpacked as they arrive; the 3 MB limit counts the unpacked bytes (no "zip bombs")
+      const enc = String(res.headers['content-encoding'] ?? '').toLowerCase().trim();
+      const unpack = enc === 'gzip' || enc === 'x-gzip' ? zlib.createGunzip() : enc === 'deflate' ? zlib.createInflate()
+        : enc === 'br' ? zlib.createBrotliDecompress() : null;
+      if (enc && enc !== 'identity' && !unpack) { res.resume(); return finish(reject, new Error(`The page uses an unsupported compression (${enc}).`)); }
+      const stream = unpack ? res.pipe(unpack) : res;
       const chunks = []; let size = 0;
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) { res.resume(); return resolve({ redirect: res.headers.location, status: res.statusCode }); }
-      res.on('data', (c) => { size += c.length; if (size > MAX_BYTES) { req.destroy(); resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks), cut: true }); } else chunks.push(c); });
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
-      res.on('error', reject);
+      const done = (cut) => finish(resolve, { status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks), cut });
+      stream.on('data', (c) => {
+        if (settled) return;
+        if (size + c.length > MAX_BYTES) { chunks.push(c.subarray(0, MAX_BYTES - size)); size = MAX_BYTES; done(true); req.destroy(); return; }
+        size += c.length; chunks.push(c);
+      });
+      stream.on('end', () => done(false));
+      stream.on('error', (e) => finish(reject, new Error(`Could not read the page (${e.message}).`)));
     });
-    req.on('timeout', () => req.destroy(new Error('The page took too long to answer.')));
-    req.on('error', reject);
+    // One limit for the whole read, so a site that sends a byte now and then cannot hold it open
+    const timer = setTimeout(() => { finish(reject, new Error('The page took too long to answer.')); req.destroy(); }, Math.max(1, deadline - Date.now()));
+    req.on('error', (e) => finish(reject, e));
   });
 }
 
-const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', copy: '©', reg: '®', hellip: '…', mdash: '—', ndash: '–', laquo: '«', raquo: '»', yen: '¥', middot: '·' };
-/** Page HTML to readable text (headings, paragraphs and list items on their own lines) */
-export function htmlToText(html) {
-  let s = String(html);
-  const title = (s.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '').trim();
-  s = s.replace(/<!--[\s\S]*?-->/g, ' ');
-  // The main part of the page when the site marks it (skips menus and sidebars)
-  const main = s.match(/<main\b[\s\S]*<\/main>/i)?.[0] ?? s.match(/<article\b[\s\S]*<\/article>/i)?.[0];
-  if (main && main.length > 500) s = main;
-  s = s
-    .replace(/<(script|style|noscript|svg|template|iframe|head)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<(nav|footer)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<li\b[^>]*>/gi, '\n- ')
-    .replace(/<h([1-6])\b[^>]*>/gi, (_m, n) => '\n\n' + '#'.repeat(Number(n)) + ' ')
-    .replace(/<\/(p|div|section|article|h[1-6]|li|ul|ol|table|tr|blockquote|pre|header|main|dd|dt)>/gi, '\n')
-    .replace(/<(td|th)\b[^>]*>/gi, ' | ')
-    .replace(/<[\/!]?[a-z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/gi, '')
-    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
-      if (e[0] === '#') { const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); try { return String.fromCodePoint(n); } catch { return m; } }
-      return ENT[e.toLowerCase()] ?? m;
-    })
-    .replace(/[ \t\u00a0]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  return (title ? `# ${title}\n\n` : '') + s;
-}
-
 function decode(buf, contentType) {
-  const cs = (String(contentType).match(/charset=([\w-]+)/i)?.[1] ?? buf.subarray(0, 2048).toString('latin1').match(/<meta[^>]+charset=["']?([\w-]+)/i)?.[1] ?? 'utf-8').toLowerCase();
+  const cs = (String(contentType).match(/charset=["']?([\w-]+)/i)?.[1] ?? buf.subarray(0, 2048).toString('latin1').match(/<meta[^>]+charset=["']?([\w-]+)/i)?.[1] ?? 'utf-8').toLowerCase();
   try { return new TextDecoder(cs === 'sjis' || cs === 'x-sjis' ? 'shift_jis' : cs).decode(buf); } catch { return buf.toString('utf8'); }
 }
 
 /** Fetches a page; returns the text from `offset`, at most FETCH_PAGE_CHARS characters, with a header line */
 export async function fetchPage(raw, offset = 0) {
   let u = checkUrl(raw);
+  const deadline = Date.now() + DEADLINE_MS;
   let r;
   for (let hop = 0; ; hop++) {
-    r = await getOnce(u);
+    r = await getOnce(u, deadline);
     if (!r.redirect) break;
-    if (hop >= 5) throw new Error('Too many redirects.');
+    if (hop >= MAX_REDIRECTS) throw new Error('Too many redirects.');
     u = checkUrl(new URL(r.redirect, u).href);
   }
   if (r.status >= 400) throw new Error(`The site answered with HTTP ${r.status}.`);

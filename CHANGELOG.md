@@ -2,6 +2,27 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-10-23
+
+### Fixed
+- **A hostile page could stall the page reader** (thousands of unclosed tags took minutes to convert, freezing the desktop
+  server or the Android screen). The HTML-to-text converter now works in a single pass (a 1.5 MB hostile page: under 0.1 s)
+  and is one shared file for both platforms (`public/htmltext.js`).
+- Page reading has one 30-second limit per read (a site sending a byte now and then could hold it open), unpacks compressed
+  pages (the 3 MB limit counts unpacked bytes), refuses a name if any of its addresses is private, and treats `localhost.` and
+  `.home.arpa` names as local.
+- List items no longer have blank lines between them in page text.
+- A broken link to `Providers.java` in the README.
+- The Japanese label for pages read in Chat (it showed "Read: pages (1)").
+
+### Changed
+- The web search confirmation now also says that pages are opened from your device and that a site receives only the page
+  address.
+
+### Added
+- 9 tests: address checks, the HTML converter (including hostile pages), the search limit, and a check that every script the page
+  loads is also copied into the Android app.
+
 ## [1.4.0] - 2026-10-23
 
 ### Fixed

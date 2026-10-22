@@ -232,13 +232,13 @@ public class MainActivity extends Activity {
         KEYS.put("Home", KeyEvent.KEYCODE_MOVE_HOME); KEYS.put("End", KeyEvent.KEYCODE_MOVE_END); KEYS.put("Space", KeyEvent.KEYCODE_SPACE);
     }
 
-    /** Only public internet hosts: not this phone, the local network, other private ranges, or China's country domains */
+    /** Only public internet hosts: not this phone, the local network or other private ranges */
     private static void checkPublicHost(String host) throws Exception {
-        String h = host == null ? "" : host.toLowerCase(Locale.ROOT).replaceAll("^\\[|\\]$", "");
+        String h = host == null ? "" : host.toLowerCase(Locale.ROOT).replaceAll("^\\[|\\]$", "").replaceAll("\\.+$", "");
+        if (h.endsWith(".home.arpa")) throw new Exception("Only public web pages can be read.");
         if (h.isEmpty() || h.equals("localhost") || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) {
             throw new Exception("Only public web pages can be read.");
         }
-        if (h.matches(".*\\.(cn|xn--fiqs8s|xn--fiqz9s|中国|中國)\\.?$")) throw new Exception("Sites under China's country domains are not read by this app.");
         for (InetAddress a : InetAddress.getAllByName(h)) {
             byte[] b = a.getAddress();
             int b0 = b[0] & 0xff, b1 = b.length > 1 ? b[1] & 0xff : 0;
@@ -537,8 +537,8 @@ public class MainActivity extends Activity {
         /** File operations inside the chosen folder (see AgentFs) */
         /**
          * Reads one public web page for the agent's web_fetch tool: GET only, no cookies, at most 5 redirects (each checked
-         * again), at most 3 MB. Addresses on this phone, the local network or other private ranges are refused, and so are
-         * China's country domains. Plain http is tried as https (Android blocks unencrypted traffic).
+         * again), at most 3 MB. Addresses on this phone, the local network or other private ranges are refused.
+         * Plain http is tried as https (Android blocks unencrypted traffic).
          */
         @JavascriptInterface
         public void webFetch(int id, String json) {
@@ -546,6 +546,8 @@ public class MainActivity extends Activity {
                 HttpURLConnection c = null;
                 try {
                     String url = new JSONObject(json).getString("url");
+                    // One limit for the whole read, so a site that sends a byte now and then cannot hold it open
+                    long deadline = SystemClock.elapsedRealtime() + 30000;
                     for (int hop = 0; ; hop++) {
                         URL u = new URL(url);
                         if ("http".equals(u.getProtocol())) u = new URL("https", u.getHost(), u.getPort() == 80 ? -1 : u.getPort(), u.getFile());
@@ -555,8 +557,9 @@ public class MainActivity extends Activity {
                         c = (HttpURLConnection) u.openConnection();
                         c.setInstanceFollowRedirects(false);
                         c.setUseCaches(false);
-                        c.setConnectTimeout(15000);
-                        c.setReadTimeout(20000);
+                        int left = (int) Math.max(1000, deadline - SystemClock.elapsedRealtime());
+                        c.setConnectTimeout(Math.min(15000, left));
+                        c.setReadTimeout(Math.min(20000, left));
                         c.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; BaleenCode web_fetch)");
                         c.setRequestProperty("Accept", "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5");
                         c.setRequestProperty("Accept-Language", "ja,en;q=0.8");
@@ -576,6 +579,7 @@ public class MainActivity extends Activity {
                             byte[] buf = new byte[16384];
                             int n;
                             while ((n = is.read(buf)) > 0) {
+                                if (SystemClock.elapsedRealtime() > deadline) throw new Exception("The page took too long to answer.");
                                 if (bo.size() + n > 3 * 1024 * 1024) { cut = true; break; }
                                 bo.write(buf, 0, n);
                             }
