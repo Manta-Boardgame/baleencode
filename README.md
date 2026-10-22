@@ -269,9 +269,9 @@ Manual runs with a real model are listed with their results and cost in [docs/TE
 
 ## License
 
-No licence has been chosen yet. Until one is added, all rights are reserved: you may read and run the code, but may not
-redistribute or modify it without the author's permission. (Third-party components keep their own licences — see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).)
+[0BSD](LICENSE) (BSD Zero Clause License): use, copy, modify and distribute it for any purpose, with or without fee, with no
+conditions — you do not even have to keep the copyright notice. It comes with no warranty. Third-party components keep
+their own licences; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Acknowledgements
 
