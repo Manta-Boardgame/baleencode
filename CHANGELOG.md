@@ -2,6 +2,22 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.4.2] - 2026-10-23
+
+### Changed
+- The model's thinking now folds away once the answer starts (click "Thought process" to open it), so answers and their
+  sources are visible at once.
+- The goal bar shows the cost of the running request as it goes (it showed $0.0000 until the request ended).
+- The Agent tab's header button is called "New conversation", like the tabs.
+- Paths show a backslash on Japanese Windows too (the interface font now prefers Segoe UI, whose backslash is not drawn as a
+  yen sign).
+- README: a new demo recorded with the current version (a `/goal` run with web search and page reading), real screenshots,
+  and an updated feature list.
+
+### Added
+- Agent requests can carry the user's standing instructions (`instructions`, at most 4,000 characters), added to the system
+  prompt. They shape the answers only: approvals, folder limits and the provider allowlist stay enforced by code (tested).
+
 ## [1.4.1] - 2026-10-23
 
 ### Fixed

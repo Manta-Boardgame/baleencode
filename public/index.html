@@ -21,7 +21,7 @@
   *{box-sizing:border-box}
   [hidden]{display:none!important}   /* rows that set display:flex must still disappear when hidden */
   body{margin:0;background:var(--bg);color:var(--ink);
-    font:15.5px/1.7 system-ui,"Segoe UI","Yu Gothic UI","Hiragino Sans",sans-serif;
+    font:15.5px/1.7 "Segoe UI",system-ui,"Yu Gothic UI","Hiragino Sans",sans-serif;   /* Segoe UI first: Japanese UI fonts draw the backslash in paths as a yen sign */
     height:100vh;display:flex;flex-direction:column}
   /* ---- header ---- */
   header{display:flex;align-items:center;gap:10px;padding:7px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
@@ -45,7 +45,12 @@
   .avatar{flex:none;width:26px;height:26px;border-radius:7px;overflow:hidden;margin-top:3px}
   .avatar img{width:100%;height:100%;display:block}
   .bubble{flex:1;min-width:0}
-  .bubble .think{color:var(--muted);font-size:13.5px;border-left:2px solid var(--line);padding-left:10px;margin-bottom:10px;white-space:pre-wrap}
+  .bubble .think{color:var(--muted);font-size:13.5px;margin-bottom:10px}
+  .bubble .think summary{cursor:pointer;font-size:12.5px;list-style:none;width:max-content}
+  .bubble .think summary::-webkit-details-marker{display:none}
+  .bubble .think summary::before{content:'›';display:inline-block;width:1em;transition:transform .15s}
+  .bubble .think[open] summary::before{transform:rotate(90deg)}
+  .bubble .think > div{border-left:2px solid var(--line);padding-left:10px;margin-top:6px;white-space:pre-wrap}
   .md p{margin:0 0 .75em} .md > :last-child{margin-bottom:0}
   .md h3,.md h4,.md h5,.md h6{margin:1.1em 0 .45em;line-height:1.35} .md > :first-child{margin-top:0}
   .md h3{font-size:1.2em} .md h4{font-size:1.08em} .md h5,.md h6{font-size:1em}
@@ -211,7 +216,7 @@
   </h1>
   <div class="hdr-actions">
     <button class="link" id="newChat" title="Start a new conversation">New chat</button>
-    <button class="link" id="agNew" hidden>New session</button>
+    <button class="link" id="agNew" hidden>New conversation</button>
     <button class="link" id="keyBtn" title="Set your API key">API key</button>
     <button class="link" id="langBtn" hidden></button>
   </div>
@@ -762,7 +767,8 @@ function renderItem(item, idx){
   } else {
     const b = document.createElement('div');
     b.className = 'msg bot';
-    const think = item.thinking ? `<div class="think">${esc(item.thinking)}</div>` : '';
+    // The model's thinking folds away once the answer is there (it can be opened again)
+    const think = item.thinking ? `<details class="think"${item.done ? '' : ' open'}><summary>${esc(t('Thought process'))}</summary><div>${esc(item.thinking)}</div></details>` : '';
     const body = item.error
       ? `<div class="error">${esc(item.error)}</div>`
       : `${think}<div class="text md">${MD.render(item.content)}</div>`
@@ -862,11 +868,16 @@ async function send(){
   const res = await api.chat({
     // With web search, a little thinking made answers about "the latest ..." pick the newest result (tested; about the same cost)
     messages, effort: chatWeb && $('effort').value === 'none' ? 'low' : $('effort').value, webSearch: chatWeb, signal: controller.signal,
-    onChunk: (t) => { botItem.content += t; drawText(); },
+    onChunk: (t) => { botItem.content += t; if (thinkEl) thinkEl.open = false; drawText(); },
     onThink: (t) => {
       botItem.thinking += t;
-      if (!thinkEl) { thinkEl = document.createElement('div'); thinkEl.className = 'think'; bubble()?.prepend(thinkEl); }
-      thinkEl.textContent = botItem.thinking;
+      if (!thinkEl) {
+        thinkEl = document.createElement('details'); thinkEl.className = 'think'; thinkEl.open = true;
+        const s = document.createElement('summary'); s.textContent = window.t ? window.t('Thought process') : 'Thought process';
+        thinkEl.append(s, document.createElement('div'));
+        bubble()?.prepend(thinkEl);
+      }
+      thinkEl.lastChild.textContent = botItem.thinking;
       scroller.scrollTop = scroller.scrollHeight;
     },
   }).catch(e => ({ ok: false, error: e?.name === 'AbortError' ? 'Stopped.' : String(e?.message ?? e) }));
@@ -1330,6 +1341,8 @@ function agOnEvent(ev, approve){
     case 'usage':
       agLive.calling = false; agLive.inTok += Number(ev.inTok) || 0; agLive.outTok += Number(ev.outTok) || 0;
       agLive.spent = Number(ev.spent) || 0; agLiveDraw();
+      // The goal bar counts the running request too (its total is saved when the request ends)
+      if (agRunInfo?.goal && agGoal) $('agGoalCost').textContent = '$' + ((agGoal.spent || 0) + agLive.spent).toFixed(4);
       if (ev.provider && !allowedSlugs().includes(ev.provider)) agEl('note bad', `Served by "${ev.provider}", which is not on the approved list.`);
       break;
     case 'done':

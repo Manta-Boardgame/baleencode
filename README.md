@@ -5,7 +5,8 @@
 > Unofficial, community-made app. Not affiliated with DeepSeek, Alibaba or Vercel; it only uses DeepSeek's open-weights model through Vercel AI Gateway.
 
 **An agent for DeepSeek models that never sends your data to China.** Like Claude Code or Codex, it reads and edits your files,
-drives a browser and operates apps — and with `/goal` it keeps working on its own for hours — on Windows and Android.
+searches the web and reads pages, drives a browser and operates apps — and with `/goal` it keeps working on its own for
+hours — on Windows and Android.
 
 *Why the name:* baleen whales filter the sea through their baleen plates and keep only what they want. BaleenCode does the same
 with AI providers: only the ones on its allowlist ever see your data.
@@ -22,9 +23,11 @@ ever comes from a company outside that list.
 | Billing | Your own Vercel AI Gateway key — free while within your free credits |
 
 
-![A /goal run: the agent reads two notes, writes summary.md and checks it](docs/img/demo.gif)
+![A /goal run with web search: the agent checks php.net, writes update-plan.md for the servers in servers.md and checks it](docs/img/demo.gif)
 
-*A real `/goal` run (16 s, $0.004): it searches the folder, writes `summary.md`, re-reads it and checks it against the notes.*
+*A real `/goal` run with web search on (64 s, $0.07, sped up only where the screen did not change): asked which servers in
+`servers.md` need the latest PHP security release, the agent searched the web, read the advisory pages on php.net, wrote
+`update-plan.md`, then re-read it and checked every version against the notes and two php.net pages before finishing.*
 
 ## Download
 
@@ -43,9 +46,12 @@ check with `apksigner verify --print-certs`). Prefer to build it yourself? See *
 
 | Chat | Agent |
 |---|---|
-| ![Chat with an attached PDF](docs/img/chat.png) | ![A finished /goal run at the Autonomous approval level](docs/img/agent.png) |
+| ![Chat with web search: a dated answer with its sources](docs/img/chat.png) | ![The end of the /goal run above, with the verdict for each server](docs/img/agent.png) |
 
-*Sample content only. Right: a `/goal` run at the Autonomous level — the agent searched, read, wrote, re-read its result and stopped on its own. The line under the input shows the elapsed time, step and tokens used; it updates every second while the model works.*
+*Real runs, unedited apart from hiding the account's billing. Left: a question with web search on — the answer comes with
+its sources and the date it is valid for; the model's thinking is folded away (click to open). Right: the end of the `/goal`
+run above. The line under the input shows the elapsed time, step, tokens and cost so far, updated every second; the tabs
+above the conversation keep several conversations apart.*
 
 ## How it works
 
@@ -116,12 +122,16 @@ provider's own documentation if you need a specific region.
 
 ## Features
 
-- Streaming replies, multi-turn conversation, optional "thinking" mode (off / low / high)
+- Streaming replies, multi-turn conversation, an adjustable "thinking" level (Chat and Agent); the model's thinking folds away
+  once the answer arrives
+- **Web search** (Chat and Agent, off until you turn it on): answers cite their sources; with it on, the agent can also read
+  whole pages, and Chat reads pages whose addresses you paste
+- **Several conversations** in the Agent tab, as tabs you can rename and delete
 - Attach a file and ask about it: text, PDF, Word (`.docx`) and images
 - Image and scanned-PDF text recognition runs **on your device**; images are never uploaded
 - **Agent mode**: let the model read, search and edit files in a folder you choose (or, on Windows, the whole PC), drive its own browser window, or operate desktop / phone apps you pick — see below
 - **Three approval levels** (ask every time / auto-accept edits / autonomous) and **`/goal`**: the agent keeps working toward a goal for hours, checks its own result, and stops only for risky actions
-- Shows the real cost of every reply and your remaining free credits
+- Shows the real cost of every reply, the tokens and cost of a running request as it goes, and your remaining free credits
 - Stops before you are charged when the free credits or your Vercel budget run out
 
 ## Before you start: get your own API key
@@ -372,7 +382,7 @@ npm install
 npm test
 ```
 
-37 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
+38 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
 is fooled: folder escapes (`..`, absolute paths, junctions), per-mode tool sets, the three approval levels, the ask-first list
 (secrets, permanent deletes, `git push`, data upload commands) even at the Autonomous level, plan mode changing nothing, goal mode
 (continuing, checking, skipping unanswered approvals, compacting with the same allowlist), web search being off unless turned on and never in summaries, the per-request search setting and search limit, the page reader refusing private addresses (including tricks such as `http://2130706433/` or `localhost.`) and staying fast on hostile pages, the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB

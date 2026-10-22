@@ -6,7 +6,7 @@ Thanks for looking. This is a small project maintained in spare time, so replies
 
 ```bash
 npm install
-npm test        # 37 tests; no network, no API key, no cost
+npm test        # 38 tests; no network, no API key, no cost
 npm start       # http://localhost:4141 (Windows)
 ```
 

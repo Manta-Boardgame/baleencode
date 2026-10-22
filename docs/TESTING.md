@@ -36,6 +36,7 @@ deterministic. They check the part that must hold *even if the AI is fooled*: li
 | After 12 searches in a request the search tool is removed and the model is told so; page reading still works | A request cannot run up search costs |
 | A tool call written as text is not shown as the answer; the model is asked again | Search replies do not end in raw markup |
 | The thinking setting follows the user's choice | Effort is what the user picked |
+| Standing instructions reach the system prompt (capped at 4,000 characters) and a secret file still asks first | Instructions cannot loosen what code enforces |
 | Address checks: loopback, private, link-local, CGNAT, multicast, IPv4-mapped IPv6, `2130706433`, `0x7f.1`, `localhost.`, `.local`, `.home.arpa` | Tricks that point at this machine are refused before connecting |
 | HTML to text keeps headings, lists, tables; drops scripts, styles, menus; decodes entities; keeps only `<main>` when present | Pages read cleanly |
 | Eight hostile pages (thousands of unclosed tags, 1.5 M "<" characters …) are converted in under 3 s in total | A page cannot stall the app (the old converter took 20 s for 450 KB) |
@@ -74,6 +75,7 @@ Expected: the log contains one `submit` event with those values, **no** `DELETE_
 | Oct 22 | Android: Settings → Internet page, which Android hides from accessibility services | The app could not see the page and refused to tap (by design) |
 | Oct 22 | Android browser panel, text style: web search for the official Kotlin website on DuckDuckGo | Correct (kotlinlang.org, ads skipped); 5 s, about $0.002 |
 | Oct 22 | Android browser panel, screenshot style: fill and submit httpbin.org's test form | Result page matched (name, size, topping); about $0.004; slow because of the provider's rate limit |
+| Oct 23 | README demo: `/goal` "check php.net for the latest PHP security release and write update-plan.md for the servers in servers.md, then check it", Windows, web search on, English build | Correct verdict for all three servers (two updates, one already patched), sources cited, file re-checked; 64 s, $0.070 |
 | Oct 23 | Agent with web search on, in a conversation that already held three "I have no search tool" replies (the user's report), Android loop with the native request rules | Before: answered from the old replies without searching (on the phone). After: searched at once, read six php.net / GitHub pages, wrote the report once — $0.054, 46 s (before the step-memory rule: 6 rewrites, stopped at the $0.30 limit after 400 s) |
 | Oct 23 | Same on Windows through the app server (Node.js LTS question) | 1 search, 3 pages read (nodejs.org), file written once; $0.015 |
 | Oct 23 | Installed 1.4.0 over 1.3.0 on a Nothing Phone (3a), Android 15 | Old conversation kept as the first tab; agent searched (1) and read php.net natively; live status showed tokens and $0.0139 |

@@ -401,3 +401,18 @@ test('a request stops searching after its search limit, says so to the model, an
     assert.match(captured[2].messages.find(m => m.role === 'user' && /App note/.test(m.content)).content, /limit .* reached/);
   } finally { s.done(); }
 });
+
+test('standing instructions from the user go into the system prompt (capped), but cannot loosen what code enforces', async () => {
+  const s = sandbox();
+  try {
+    const c = [];
+    const r = await run({ mode: 'folder', root: s.work, instructions: '  Answer in haiku.  ' + 'x'.repeat(5000) }, [[['read_file', { path: '.env' }]], 'done'], { captured: c });
+    const sys = c[0].messages[0].content;
+    assert.match(sys, /STANDING INSTRUCTIONS FROM THE USER[^\n]*\nAnswer in haiku\./);
+    assert.ok(sys.length < 20000 && !sys.includes('x'.repeat(4001)), 'capped at 4000 characters');
+    assert.equal(r.asked.length, 1);                       // the secret file still asks first
+    const none = [];
+    await run({ mode: 'read', root: s.work }, ['done'], { captured: none });
+    assert.doesNotMatch(none[0].messages[0].content, /STANDING INSTRUCTIONS/);
+  } finally { s.done(); }
+});

@@ -604,7 +604,8 @@ Say which sources (titles or addresses) your answer is based on and how recent t
   /** DeepSeek sometimes writes a tool call as text after a gateway search instead of calling the tool */
   const TOOL_MARKUP = /<｜DSML｜|<\|DSML\|/;
 
-  const SYSTEM = (c) => SYSTEM_BASE(c) + (c.plan ? PLAN_RULES : '') + (c.goal ? GOAL_RULES(c.goal) : '') + (c.webSearch ? SEARCH_RULES : NO_SEARCH_RULES);
+  const SYSTEM = (c) => SYSTEM_BASE(c) + (c.plan ? PLAN_RULES : '') + (c.goal ? GOAL_RULES(c.goal) : '') + (c.webSearch ? SEARCH_RULES : NO_SEARCH_RULES)
+    + (c.instructions ? `\n\nSTANDING INSTRUCTIONS FROM THE USER (for this whole conversation):\n${c.instructions}` : '');
 
   // Approval levels, as on Windows: ask (every change asks) / edits (file edits go ahead) / auto (all go ahead
   // except the always-ask list: secrets, purchase / delete / send buttons, password fields)
@@ -666,6 +667,8 @@ Say which sources (titles or addresses) your answer is based on and how recent t
     const level = mode === 'read' ? 'ask' : LEVELS.includes(body.approval) ? body.approval : body.autoApprove === true ? 'auto' : 'edits';
     const c = { mode, level, plan, goal, root: body.root, rootName: body.rootName || 'the chosen folder', apps, app: apps[0]?.pkg, appName: apps[0]?.name,
       style: BSTYLE[mode], webSearch: body.webSearch === true,
+      // The user's standing instructions (optional; they shape answers only, the limits are enforced by code)
+      instructions: typeof body.instructions === 'string' ? body.instructions.trim().slice(0, 4000) : '',
       // Thinking effort chosen by the user; "auto": none, or low with web search (picked the newest results more reliably)
       effort: ['none', 'low', 'high', 'max'].includes(body.effort) ? body.effort : body.webSearch === true ? 'low' : 'none' };
     let history = (Array.isArray(body.history) ? body.history : []).filter(m => m && ['user', 'assistant', 'tool'].includes(m.role));
