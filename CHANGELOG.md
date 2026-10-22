@@ -2,6 +2,20 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-10-23
+
+### Changed
+- New layout in the spirit of Claude Code and Codex: the conversation fills the screen in a wide, readable column; the settings
+  (mode, folder, approval, web search, cost cap) are chips in the composer card; on phones the less used ones fold behind ⚙.
+- Replies are shown as formatted Markdown (headings, lists, tables, code, links). The renderer escapes everything first and
+  builds only a fixed set of tags; links open only for http(s) addresses.
+- Tool activity is one compact line per action; details open on click.
+
+### Added
+- Live status while the model works: elapsed time, step, and input / output tokens (the model's own counts, added up per
+  step) in the Agent tab; elapsed time and an estimate of the tokens so far while a chat reply streams, with the real counts
+  under the reply afterwards.
+
 ## [1.1.0] - 2026-10-22
 
 ### Added

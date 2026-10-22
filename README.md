@@ -45,7 +45,7 @@ check with `apksigner verify --print-certs`). Prefer to build it yourself? See *
 |---|---|
 | ![Chat with an attached PDF](docs/img/chat.png) | ![A finished /goal run at the Autonomous approval level](docs/img/agent.png) |
 
-*Sample content only. Right: a `/goal` run at the Autonomous level — the agent searched, read, wrote, re-read its result and stopped on its own.*
+*Sample content only. Right: a `/goal` run at the Autonomous level — the agent searched, read, wrote, re-read its result and stopped on its own. The line under the input shows the elapsed time, step and tokens used; it updates every second while the model works.*
 
 ## How it works
 

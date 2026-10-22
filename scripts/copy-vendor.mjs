@@ -25,6 +25,6 @@ for (const dest of targets) {
 
 // The Android app shows the same page as the desktop version
 const assets = path.join(root, 'android', 'app', 'src', 'main', 'assets');
-for (const f of ['index.html', 'icon.png', 'agent-android.js', 'i18n.js']) {
+for (const f of ['index.html', 'icon.png', 'agent-android.js', 'markdown.js', 'i18n.js']) {
   fs.copyFileSync(path.join(root, 'public', f), path.join(assets, f));
 }

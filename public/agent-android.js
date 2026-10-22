@@ -619,6 +619,7 @@ WEB SEARCH. You can search the web with the parallel_search tool when you need c
     async function step(messages, tools, useVision = false, useSearch = false) {
       const payload = JSON.stringify({ messages, tools, effort: 'none', vision: useVision, webSearch: useSearch });
       let j = null, status = 0, text = '';
+      emit({ type: 'call' });
       for (let attempt = 0; ; attempt++) {
         const id = ++bridgeSeq; curStep = id;
         const r = await new Promise(resolve => { bridgePending[id] = resolve; window.DSBridge.agentStep(id, payload, getKey()); });
@@ -646,7 +647,7 @@ WEB SEARCH. You can search the web with the parallel_search tool when you need c
       const cost = Number(gw?.cost ?? 0), market = Number(gw?.marketCost ?? 0);
       spent += cost;
       appLedger({ cost, inputTokens: j.usage?.prompt_tokens ?? 0, outputTokens: j.usage?.completion_tokens ?? 0 });
-      emit({ type: 'usage', provider, cost, market, spent });
+      emit({ type: 'usage', provider, cost, market, spent, inTok: j.usage?.prompt_tokens ?? 0, outTok: j.usage?.completion_tokens ?? 0 });
       const searches = Object.values(gw?.gatewayToolCalls ?? {}).reduce((n, v) => n + (Number(v) || 0), 0);
       if (searches > 0) emit({ type: 'search', count: searches });
       return { m, provider, offList: !!provider && !(useVision ? ['deepinfra'] : allowedSlugs()).includes(provider) };

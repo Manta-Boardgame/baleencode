@@ -609,6 +609,7 @@ export async function runAgent(body, io) {
       // Same hard allowlist as the chat: if no approved provider can serve it, the call fails.
       providerOptions: { gateway: { only } } });
     let upstream, text = '', j = null;
+    io.emit({ type: 'call' });
     for (let attempt = 0; ; attempt++) {
       try {
         upstream = await fetch(`${io.gateway}/v1/chat/completions`, {

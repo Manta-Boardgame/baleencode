@@ -1,6 +1,6 @@
 {
   "name": "baleencode",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Claude Code / Codex-style agent for DeepSeek models (Windows and Android) that only uses approved US inference providers via Vercel AI Gateway",
   "private": true,
   "type": "module",
