@@ -148,7 +148,7 @@ You can also run `npm start` and open http://localhost:4141.
 
 ## Android
 
-**Requirements:** Android 7.0 or later to run it; Android Studio (or JDK 17 + Android SDK 36) to build it.
+**Requirements:** Android 7.0 or later to run it; Android Studio (or JDK 17 + Android SDK 36) to build it. If Gradle says *SDK location not found*, set the `ANDROID_HOME` environment variable, or create `android/local.properties` containing `sdk.dir=<path to your Android SDK>` (Android Studio does this for you).
 
 ```bash
 npm install            # copies the page and pdf.js into the Android assets
