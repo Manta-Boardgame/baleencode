@@ -15,5 +15,5 @@
   "engines": {
     "node": ">=22"
   },
-  "license": "0BSD"
+  "license": "MIT"
 }
