@@ -53,6 +53,10 @@ test('HTML becomes readable text: headings, lists, tables and entities; scripts,
   for (const gone of ['alert', 'color:red', 'Home | About', 'foot', 'note', 'DOCTYPE']) assert.ok(!t.includes(gone), gone);
 });
 
+test('the title appears once, also on a page without <head>', () => {
+  assert.equal(htmlToText('<title>T</title><p>Hello <b>world</b></p>'), '# T\n\nHello world');
+});
+
 test('only the main content is kept when the page marks it', () => {
   const body = '<p>' + 'Article text. '.repeat(50) + '</p>';
   const t = htmlToText(`<div>Sidebar menu</div><main id="content">${body}</main><div>Related links</div>`);

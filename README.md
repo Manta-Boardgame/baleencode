@@ -372,7 +372,7 @@ npm install
 npm test
 ```
 
-36 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
+37 tests run the real agent loop with a scripted model (no network, no key, no cost) and check what must hold even if the AI
 is fooled: folder escapes (`..`, absolute paths, junctions), per-mode tool sets, the three approval levels, the ask-first list
 (secrets, permanent deletes, `git push`, data upload commands) even at the Autonomous level, plan mode changing nothing, goal mode
 (continuing, checking, skipping unanswered approvals, compacting with the same allowlist), web search being off unless turned on and never in summaries, the per-request search setting and search limit, the page reader refusing private addresses (including tricks such as `http://2130706433/` or `localhost.`) and staying fast on hostile pages, the provider allowlist, the "reply from a provider outside the list" stop, and parser limits (a 200 MB

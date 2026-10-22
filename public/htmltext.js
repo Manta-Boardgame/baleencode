@@ -8,7 +8,8 @@
   'use strict';
   const MAX_INPUT = 2000000;                        // characters of HTML looked at (pages are cut at 3 MB before this)
   // Elements whose content is never text for a reader (navigation and footers are left out too)
-  const SKIP = new Set(['script', 'style', 'noscript', 'svg', 'template', 'iframe', 'head', 'nav', 'footer', 'math', 'object']);
+  // (the title is skipped too: it is put first separately, and a page may have it outside <head>)
+  const SKIP = new Set(['script', 'style', 'noscript', 'svg', 'template', 'iframe', 'head', 'title', 'nav', 'footer', 'math', 'object']);
   // (a list item ends where the next one starts, so </li> adds nothing)
   const BLOCK_END = new Set(['p', 'div', 'section', 'article', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'table', 'tr',
     'blockquote', 'pre', 'header', 'main', 'dd', 'dt', 'figure', 'figcaption', 'aside', 'form']);

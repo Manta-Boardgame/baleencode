@@ -20,7 +20,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
   address.
 
 ### Added
-- 9 tests: address checks, the HTML converter (including hostile pages), the search limit, and a check that every script the page
+- 10 tests: address checks, the HTML converter (including hostile pages), the search limit, and a check that every script the page
   loads is also copied into the Android app.
 
 ## [1.4.0] - 2026-10-23
