@@ -2,6 +2,13 @@ plugins {
     id 'com.android.application'
 }
 
+// Release signing: pass -PkeystoreProps=<path to a .properties file with storeFile, storePassword, keyAlias, keyPassword>.
+// Without it the release build is signed with the debug key, which is fine for installing it yourself.
+def releaseProps = new Properties()
+if (project.hasProperty('keystoreProps')) {
+    file(project.property('keystoreProps')).withInputStream { releaseProps.load(it) }
+}
+
 android {
     namespace 'io.github.mantaboardgame.baleencode'
     compileSdk 36
@@ -12,18 +19,28 @@ android {
         minSdk 24
         targetSdk 36
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
         // `-Parm64Only` builds a smaller APK for current phones (the native OCR libraries are shipped for one CPU type only)
         if (project.hasProperty('arm64Only')) {
             ndk { abiFilters 'arm64-v8a' }
         }
     }
 
+    signingConfigs {
+        if (releaseProps.containsKey('storeFile')) {
+            release {
+                storeFile file(releaseProps['storeFile'])
+                storePassword releaseProps['storePassword']
+                keyAlias releaseProps['keyAlias']
+                keyPassword releaseProps['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            // Signed with the debug key for easy sideloading. Use your own key for store releases.
-            signingConfig signingConfigs.debug
+            signingConfig releaseProps.containsKey('storeFile') ? signingConfigs.release : signingConfigs.debug
         }
     }
 

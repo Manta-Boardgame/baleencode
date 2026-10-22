@@ -1,5 +1,7 @@
 # BaleenCode
 
+[![CI](https://github.com/Manta-Boardgame/baleencode/actions/workflows/ci.yml/badge.svg)](https://github.com/Manta-Boardgame/baleencode/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/Manta-Boardgame/baleencode)](https://github.com/Manta-Boardgame/baleencode/releases/latest) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > Unofficial, community-made app. Not affiliated with DeepSeek, Alibaba or Vercel; it only uses DeepSeek's open-weights model through Vercel AI Gateway.
 
 **An agent for DeepSeek models that never sends your data to China.** Like Claude Code or Codex, it reads and edits your files,
@@ -19,6 +21,23 @@ ever comes from a company outside that list.
 | Runs on | Windows and Android |
 | Billing | Your own Vercel AI Gateway key — free while within your free credits |
 
+
+![A /goal run: the agent reads two notes, writes summary.md and checks it](docs/img/demo.gif)
+
+*A real `/goal` run (16 s, $0.004): it searches the folder, writes `summary.md`, re-reads it and checks it against the notes.*
+
+## Download
+
+Get the latest build from **[Releases](https://github.com/Manta-Boardgame/baleencode/releases/latest)** — no building needed.
+
+| Platform | File | How |
+|---|---|---|
+| Windows 10 / 11 | `BaleenCode-<version>-windows.zip` | Unzip, double-click **`BaleenCode.bat`**. Node.js is included. The first launch may show a SmartScreen warning (*More info → Run anyway*): the package is not code-signed. |
+| Android 7+ | `BaleenCode-<version>-arm64.apk` | For phones from about 2017 on. Use `…-universal.apk` if it will not install. Allow "install unknown apps" for your browser or file manager. |
+
+Check what you downloaded: `SHA256SUMS.txt` lists the hashes, and the APKs are signed with this project's key
+(certificate SHA-256 `89:65:2C:2E:AB:62:14:5F:F6:B7:CA:B7:D1:D3:59:71:39:E6:77:41:C9:1D:05:A1:29:17:18:ED:28:0B:64:3B`,
+check with `apksigner verify --print-certs`). Prefer to build it yourself? See *Windows* and *Android* below.
 
 ## Screens
 
@@ -116,7 +135,7 @@ On first launch the app asks for the key. It is stored only on your device and s
 
 ## Windows
 
-**Requirements:** Windows 10 or 11, [Node.js](https://nodejs.org/) 22 or later, Microsoft Edge (preinstalled).
+**Easiest:** download the zip from [Releases](https://github.com/Manta-Boardgame/baleencode/releases/latest) (see *Download*). **From source:** Windows 10 or 11, [Node.js](https://nodejs.org/) 22 or later, Microsoft Edge (preinstalled).
 
 ```bash
 git clone https://github.com/Manta-Boardgame/baleencode.git
@@ -137,7 +156,7 @@ cd android
 ./gradlew assembleDebug
 ```
 
-The APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. For a smaller release build for current phones, run `./gradlew assembleRelease -Parm64Only` (it is signed with your local debug key, which is fine for installing it yourself). To install an APK you built, allow installing apps from unknown sources on the phone.
+The APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. For a smaller release build for current phones, run `./gradlew assembleRelease -Parm64Only` (without `-PkeystoreProps=<file>` it is signed with your local debug key, which is fine for installing it yourself; the official APKs on Releases are signed with the project key). To install an APK you built, allow installing apps from unknown sources on the phone.
 
 ## Agent mode (work on your own files)
 
@@ -313,6 +332,8 @@ Manual runs with a real model are listed with their results and cost in [docs/TE
 | [docs/PROVIDERS.md](docs/PROVIDERS.md) | What is claimed about each provider, how it was checked, how to re-check |
 | [docs/TESTING.md](docs/TESTING.md) | Automated tests and the manual end-to-end runs |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Components, licences and services this project builds on |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to run the tests and what a good change looks like |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
 
 ## License
 
