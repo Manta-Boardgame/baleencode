@@ -1,4 +1,4 @@
-package com.deepseek.chat;
+package io.github.mantaboardgame.baleencode;
 
 import org.json.JSONArray;
 import org.json.JSONObject;

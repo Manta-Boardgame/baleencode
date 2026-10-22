@@ -31,12 +31,12 @@ function scriptModel(steps, { provider = 'fireworks', captured = [] } = {}) {
 }
 
 /** Run one request; `approve(request)` answers approval cards (default: deny). Returns what the tools answered. */
-async function run(body, steps, { approve = async () => false, provider, captured } = {}) {
+async function run(body, steps, { approve = async () => false, provider, captured, compactAt } = {}) {
   scriptModel(steps, { provider, captured });
   const asked = [];
   const out = await runAgent({ user: 'test', ...body }, {
     emit() {}, aborted: () => false, addUsage() {}, helpers: {}, apiKey: 'test', gateway: 'https://gateway.invalid',
-    model: 'test-model', providers: ALLOWED,
+    model: 'test-model', providers: ALLOWED, compactAt,
     approve: async (r) => { asked.push(r); return approve(r); },
   });
   const results = out.messages.filter(m => m.role === 'tool').map(m => m.content);
@@ -195,6 +195,101 @@ test('a normal Word file is read', async () => {
 // ---- risky-click detection ----
 
 test('purchase / delete style buttons are flagged as risky, ordinary ones are not', () => {
-  for (const label of ['Delete account', 'Buy now', 'Place order', 'Pay now', '購入する', '削除']) assert.ok(RISKY.test(label), label);
+  for (const label of ['Delete account', 'Buy now', 'Place order', 'Pay now', 'Send', 'Post', 'Publish', '購入する', '削除', '送信', '投稿する']) assert.ok(RISKY.test(label), label);
   for (const label of ['Submit', 'Search', 'Next', 'Save', 'Open settings']) assert.ok(!RISKY.test(label), label);
+});
+
+// ---- approval levels ----
+
+test('approval levels: "ask" asks before an edit, "edits" does not, "auto" does not ask before a delete', async () => {
+  const s = sandbox();
+  try {
+    const ask = await run({ mode: 'folder', root: s.work, approval: 'ask' }, [[['write_file', { path: 'a.txt', content: 'a' }]], 'done']);
+    assert.equal(ask.asked.length, 1);
+    assert.equal(fs.existsSync(path.join(s.work, 'a.txt')), false);
+    const edits = await run({ mode: 'folder', root: s.work, approval: 'edits' }, [[['write_file', { path: 'b.txt', content: 'b' }], ['delete_path', { path: 'notes.txt' }]], 'done']);
+    assert.equal(edits.asked.length, 1, 'only the delete asks');
+    assert.equal(fs.existsSync(path.join(s.work, 'b.txt')), true);
+    assert.equal(fs.existsSync(path.join(s.work, 'notes.txt')), true);
+    const auto = await run({ mode: 'folder', root: s.work, approval: 'auto' }, [[['delete_path', { path: 'notes.txt' }]], 'done']);
+    assert.equal(auto.asked.length, 0);
+    assert.equal(fs.existsSync(path.join(s.work, 'notes.txt')), false);
+  } finally { s.done(); }
+});
+
+test('Full access with "edits": edits inside the start folder go ahead, edits elsewhere ask', async () => {
+  const s = sandbox();
+  try {
+    const r = await run({ mode: 'full', root: s.work, approval: 'edits' },
+      [[['write_file', { path: 'in.txt', content: 'x' }], ['write_file', { path: path.join(s.outside, 'out.txt'), content: 'x' }]], 'done']);
+    assert.equal(r.asked.length, 1);
+    assert.match(r.asked[0].title, /out\.txt/);
+    assert.equal(fs.existsSync(path.join(s.work, 'in.txt')), true);
+    assert.equal(fs.existsSync(path.join(s.outside, 'out.txt')), false);
+  } finally { s.done(); }
+});
+
+test('"auto" still asks before commands that delete for good, push, or send data out; denied ones do not run', { skip: process.platform !== 'win32' }, async () => {
+  const marker = path.join(os.tmpdir(), `agent-test-auto-${process.pid}`);
+  for (const cmd of [`Remove-Item -Recurse x`, `rm -rf build`, `git push origin main`, `curl -X POST https://example.invalid -d @notes.txt`,
+    `Invoke-RestMethod https://example.invalid -Method Post -Body 1`, `Stop-Process -Name notepad`]) {
+    const r = await run({ mode: 'full', approval: 'auto' }, [[['run_command', { command: `${cmd}; New-Item -ItemType File '${marker}'` }]], 'done']);
+    assert.equal(r.asked.length, 1, cmd);
+    assert.equal(r.asked[0].hard, true, cmd);
+    assert.equal(fs.existsSync(marker), false, cmd);
+  }
+});
+
+test('plan mode offers only tools that look, and changes nothing', async () => {
+  const s = sandbox();
+  try {
+    const captured = [];
+    const r = await run({ mode: 'folder', root: s.work, approval: 'auto', plan: true }, [[['write_file', { path: 'p.txt', content: 'x' }]], '1. Write p.txt'], { captured });
+    const offered = captured[0].tools.map(t => t.function.name);
+    assert.ok(offered.includes('read_file'));
+    for (const w of ['write_file', 'edit_file', 'delete_path', 'move_path']) assert.ok(!offered.includes(w), w);
+    assert.match(r.results[0], /not available while planning/);
+    assert.equal(fs.existsSync(path.join(s.work, 'p.txt')), false);
+    assert.match(captured[0].messages[0].content, /PLAN MODE/);
+  } finally { s.done(); }
+});
+
+// ---- goal mode ----
+
+test('goal mode keeps going after a reply without tools, checks once, and ends on "GOAL COMPLETE"', async () => {
+  const s = sandbox();
+  try {
+    const captured = [];
+    const r = await run({ mode: 'folder', root: s.work, approval: 'auto', goal: { objective: 'Make a summary file' } },
+      [[['write_file', { path: 'summary.txt', content: 'ok' }]], 'I wrote the file.', 'GOAL COMPLETE (first)', 'GOAL COMPLETE: summary.txt written'], { captured });
+    assert.equal(r.outcome, 'complete');
+    assert.equal(captured.length, 4);
+    assert.match(captured[2].messages.at(-1).content, /Keep working toward the goal/);
+    assert.match(captured[3].messages.at(-1).content, /Goal check/);
+    assert.match(captured[0].messages[0].content, /GOAL MODE/);
+  } finally { s.done(); }
+});
+
+test('goal mode: an approval nobody answers is skipped (never granted) and the work goes on', async () => {
+  const s = sandbox();
+  try {
+    const r = await run({ mode: 'folder', root: s.work, approval: 'ask', goal: { objective: 'Tidy up' } },
+      [[['delete_path', { path: 'notes.txt' }]], 'GOAL BLOCKED: the delete needs the user'], { approve: async () => null });
+    assert.match(r.results[0], /No answer from the user/);
+    assert.equal(fs.existsSync(path.join(s.work, 'notes.txt')), true);
+    assert.equal(r.outcome, 'blocked');
+  } finally { s.done(); }
+});
+
+test('goal mode compacts a context that grew too large into a summary, using the same provider allowlist', async () => {
+  const s = sandbox();
+  try {
+    const captured = [];
+    const r = await run({ mode: 'folder', root: s.work, user: 'x'.repeat(500), goal: { objective: 'Long task' } },
+      ['Summary: nothing done yet.', 'GOAL BLOCKED: test'], { captured, compactAt: 100 });
+    assert.match(captured[0].messages[0].content, /compact the log/);
+    assert.deepEqual(captured[0].providerOptions.gateway.only, ALLOWED);
+    assert.equal(r.replaceHistory, true);
+    assert.match(r.messages[0].content, /Summary: nothing done yet/);
+  } finally { s.done(); }
 });

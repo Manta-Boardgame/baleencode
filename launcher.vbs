@@ -1,4 +1,4 @@
-' Start DeepSeek Agent without a console window and open it in its own app window
+' Start BaleenCode without a console window and open it in its own app window
 Option Explicit
 Dim sh, fso, dir, i, edge, node
 Set sh = CreateObject("WScript.Shell")

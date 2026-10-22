@@ -1,9 +1,9 @@
-// Local server for DeepSeek Agent (listens on 127.0.0.1 only, so it is reachable from this PC only)
+// Local server for BaleenCode (listens on 127.0.0.1 only, so it is reachable from this PC only)
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { exec, execFile } from 'node:child_process';
+import { exec, execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ALLOWED_PROVIDERS, BLOCKED_PROVIDERS, MODEL, GATEWAY } from './providers.mjs';
 import { runAgent } from './agent.mjs';
@@ -15,6 +15,25 @@ const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
 const LEDGER = new URL('./usage-ledger.json', import.meta.url);
 const PUBLIC_DIR = fileURLToPath(new URL('./public/', import.meta.url));
 const scriptPath = (name) => fileURLToPath(new URL(`./scripts/windows/${name}`, import.meta.url));
+
+// The app was called "DeepSeek Agent" before; move its data folder (trash, backups, browser profile) to the new name once
+try {
+  const local = process.env.LOCALAPPDATA ?? os.homedir();
+  const oldDir = path.join(local, 'DeepSeekChat'), newDir = path.join(local, 'BaleenCode');
+  // Merge into the new folder without overwriting anything; the old folder is removed only when it is empty
+  const merge = (from, to) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const name of fs.readdirSync(from)) {
+      const a = path.join(from, name), b = path.join(to, name);
+      try {
+        if (!fs.existsSync(b)) fs.renameSync(a, b);
+        else if (fs.statSync(a).isDirectory() && fs.statSync(b).isDirectory()) merge(a, b);
+      } catch {}
+    }
+    try { if (!fs.readdirSync(from).length) fs.rmdirSync(from); } catch {}
+  };
+  if (fs.existsSync(oldDir)) merge(oldDir, newDir);
+} catch {}
 
 function loadLedger() {
   try { const l = JSON.parse(fs.readFileSync(LEDGER, 'utf8')); return { chargedUsd: 0, marketUsd: 0, ...l }; }
@@ -59,6 +78,20 @@ function runPowerShell(script, args, maxBuffer, sta = false) {
         reject(new Error(/^[\x20-\x7E]+$/.test(first) ? first : 'The file could not be processed.'));
       });
   });
+}
+
+/**
+ * Keep Windows awake while a long goal runs (the screen may still turn off). The helper process ends when it is
+ * stopped, or by itself when this server exits. Returns the stop function.
+ */
+function keepAwake() {
+  let child;
+  try {
+    child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath('keepawake.ps1'), '-ParentPid', String(process.pid)],
+      { stdio: 'ignore', windowsHide: true });
+    child.on('error', () => {});
+  } catch { return () => {}; }
+  return () => { try { child.kill(); } catch {} };
 }
 
 // Read text from an image with the built-in Windows OCR (runs on this PC; the image is never uploaded)
@@ -113,7 +146,8 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-const pendingApprovals = new Map();   // approvalId -> resolve(boolean)
+const pendingApprovals = new Map();   // approvalId -> resolve(boolean | null)
+const agentRuns = new Map();          // runId -> { stop, mine } for "stop after the current step"
 
 class TooLarge extends Error {}
 
@@ -284,6 +318,17 @@ async function handle(req, res) {
     return send(res, 200, { ok: true });
   }
 
+  // Stop after the current step: the run ends normally, so the work so far is returned and kept
+  if (req.method === 'POST' && req.url === '/api/agent/stop') {
+    let b; try { b = JSON.parse((await readBody(req)).toString('utf8')); } catch { return send(res, 400, { error: 'Bad request.' }); }
+    const run = agentRuns.get(String(b.id));
+    if (run) {
+      run.stop = true;
+      for (const id of run.mine) { const p = pendingApprovals.get(id); if (p) { pendingApprovals.delete(id); p(false); } }
+    }
+    return send(res, 200, { ok: true });
+  }
+
   if (req.method === 'POST' && req.url === '/api/agent') {
     let body;
     try { body = JSON.parse((await readBody(req)).toString('utf8')); } catch { return send(res, 400, { error: 'Bad request.' }); }
@@ -297,23 +342,32 @@ async function handle(req, res) {
     const emit = (ev) => { lastSeen = Date.now(); if (!closed) res.write(`data: ${JSON.stringify(ev)}
 
 `); };
+    const runId = Math.random().toString(36).slice(2, 12);
+    const run = { stop: false, mine };
+    agentRuns.set(runId, run);
+    emit({ type: 'run', id: runId });
     const io = {
       emit, apiKey, gateway: GATEWAY, model: MODEL, providers: ALLOWED_PROVIDERS.map(p => p.slug),
-      helpers: { ocr: ocrImage, ocrPdf: ocrPdfFile, ps: (script, args) => runPowerShell(script, args, 40 * 1024 * 1024) }, addUsage,
-      aborted: () => closed,
+      helpers: { ocr: ocrImage, ocrPdf: ocrPdfFile, ps: (script, args) => runPowerShell(script, args, 40 * 1024 * 1024), keepAwake }, addUsage,
+      aborted: () => closed || run.stop,
+      // Resolves true / false, or null when nobody answered in time (a goal then skips the action; it is never granted)
       approve: (r) => new Promise((resolve) => {
+        const { timeoutMs, ...card } = r;
         const id = `${r.id}-${Math.random().toString(36).slice(2, 8)}`;
         mine.add(id);
-        const timer = setTimeout(() => { pendingApprovals.delete(id); resolve(false); }, 10 * 60 * 1000);
+        const wait = Math.min(Math.max(Number(timeoutMs) || 10 * 60 * 1000, 60 * 1000), 60 * 60 * 1000);
+        const timer = setTimeout(() => { pendingApprovals.delete(id); emit({ type: 'approval_expired', approvalId: id }); resolve(null); }, wait);
         pendingApprovals.set(id, (v) => { clearTimeout(timer); resolve(v); });
-        emit({ type: 'approval', ...r, approvalId: id });
+        emit({ type: 'approval', ...card, approvalId: id, expiresIn: wait });
       }),
     };
     try {
       const out = await runAgent(body, io);
-      emit({ type: 'done', messages: out.messages, stopped: out.stopped, spent: out.spent });
+      emit({ type: 'done', ...out });
     } catch (e) {
       emit({ type: 'error', error: e?.message ?? String(e) });
+    } finally {
+      agentRuns.delete(runId);
     }
     return res.end();
   }
@@ -374,6 +428,6 @@ server.on('error', (e) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`DeepSeek Agent is running at http://localhost:${PORT} (close this window to stop)`);
+  console.log(`BaleenCode is running at http://localhost:${PORT} (close this window to stop)`);
   if (!process.env.NO_OPEN) exec(`start "" http://localhost:${PORT}`);
 });

@@ -1,4 +1,4 @@
-package com.deepseek.chat;
+package io.github.mantaboardgame.baleencode;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.Context;

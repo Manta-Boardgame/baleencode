@@ -21,8 +21,15 @@ deterministic. They check the part that must hold *even if the AI is fooled*: li
 | Read-only mode offers no write tools and creates nothing | Tool sets are per mode |
 | Commands do not exist outside Full access | No shell in folder modes |
 | Delete asks first; denied keeps the file; allowed moves it to the trash | Approval is required and nothing is erased |
-| `.env` always asks, even with auto-approve | Secrets are never read silently |
-| A dangerous command always asks, even with auto-approve, and does not run when denied (Windows) | Risky commands are gated |
+| `.env` always asks, even at the Autonomous level | Secrets are never read silently |
+| A dangerous command always asks, even at the Autonomous level, and does not run when denied (Windows) | Risky commands are gated |
+| "Ask every time" asks before an edit; "Auto-accept edits" does not (but asks before a delete); "Autonomous" does not ask before a delete | The three levels behave as documented |
+| Full access with "Auto-accept edits": edits inside the start folder go ahead, edits elsewhere ask | The edit scope is enforced |
+| At the Autonomous level, `Remove-Item -Recurse`, `rm -rf`, `git push`, `curl -X POST`, `Invoke-RestMethod -Method Post` and `Stop-Process` still ask and do not run when denied | The always-ask list holds without approvals |
+| Plan mode offers only look-up tools and changes nothing | `/plan` is read-only |
+| Goal mode continues after an answer without tools, asks for a final check, and ends on "GOAL COMPLETE" | Long runs end only on a clear verdict |
+| Goal mode: an approval nobody answers is skipped and not granted | Being away never grants anything |
+| Goal mode compacts a large context with a summary request that carries the same provider allowlist | Compaction does not leak to other providers |
 | Every request carries the provider allowlist; screen mode is limited to its own provider | Requests cannot reach China |
 | A reply from a provider outside the list stops the run | The answer is checked too |
 | An Office file expanding to 200 MB is refused; a normal Word file is read | Parser limits work without breaking normal use |
@@ -51,6 +58,8 @@ Expected: the log contains one `submit` event with those values, **no** `DELETE_
 | Oct 21 | Android emulator, accessibility mode: open Settings, find About, read the Android version | Correct (16); about $0.001 |
 | Oct 21 | Android: choosing another app, this app itself, an uninstalled package, a bad path | All refused by the native layer |
 | Oct 21 | Agent reading Word, Excel, PowerPoint and a scanned PDF (OCR) on Windows and Android | Correct on both |
+| Oct 22 | Windows, `/goal` at the Autonomous level: sum the numbers in a CSV and write the total to a file | Read, wrote, re-read; final check on request; ended "GOAL COMPLETE"; 6 steps, 9 s, about $0.002 |
+| Oct 22 | Android loop (Node harness with a fake bridge, real model): the same goal; then Stop after the first tool; then `/compact` | Goal complete (about $0.002), screen kept on during the run and released after; the stopped run kept its messages; the summary replaced the history |
 | Oct 21 | Prompt-cache measurement (5,300-token prefix, four requests) | Cache hit from the fourth request, about 73% cheaper |
 
 ## Not covered yet

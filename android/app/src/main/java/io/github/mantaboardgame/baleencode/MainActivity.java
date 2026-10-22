@@ -1,4 +1,4 @@
-package com.deepseek.chat;
+package io.github.mantaboardgame.baleencode;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -17,6 +17,7 @@ import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsResult;
 import android.webkit.ValueCallback;
@@ -335,6 +336,15 @@ public class MainActivity extends Activity {
             if (c != null) io.execute(c::disconnect);
         }
 
+        /** Keep the screen on while a long goal runs, so Android does not pause the app */
+        @JavascriptInterface
+        public void keepAwake(boolean on) {
+            runOnUiThread(() -> {
+                if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            });
+        }
+
         /** Let the user pick ONE folder with the system folder picker; the assistant is confined to it */
         @JavascriptInterface
         public void pickFolder(int id) {
@@ -487,7 +497,7 @@ public class MainActivity extends Activity {
             io.execute(() -> {
                 try {
                     DeviceControlService s = DeviceControlService.instance;
-                    if (s == null) throw new Exception("Accessibility access is off. Turn on \"DeepSeek Agent\" in Settings > Accessibility.");
+                    if (s == null) throw new Exception("Accessibility access is off. Turn on \"BaleenCode\" in Settings > Accessibility.");
                     JSONObject a = new JSONObject(json);
                     String pkg = a.getString("pkg");
                     if (pkg.equals(getPackageName()) || !isLauncherApp(pkg)) throw new Exception("That app cannot be controlled.");

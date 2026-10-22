@@ -1,5 +1,5 @@
 {
-  "name": "deepseek-agent",
+  "name": "baleencode",
   "version": "1.0.0",
   "description": "Chat app for DeepSeek V4.1 Flash via Vercel AI Gateway, restricted to approved (non-Chinese) inference providers",
   "private": true,

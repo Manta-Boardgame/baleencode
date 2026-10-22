@@ -1,4 +1,4 @@
-package com.deepseek.chat;
+package io.github.mantaboardgame.baleencode;
 
 import android.content.ContentResolver;
 import android.database.Cursor;

@@ -7,7 +7,7 @@
 <meta name="app-lang" content="en">
 <!-- Security: only this app's own files may run or be contacted; nothing is loaded from other sites -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
-<title>DeepSeek Agent</title>
+<title>BaleenCode</title>
 <link rel="icon" href="icon.png">
 <style>
   :root{
@@ -39,7 +39,8 @@
   .msg.user{align-self:flex-end;background:var(--user);border-radius:14px 14px 4px 14px;padding:10px 14px}
   .msg.bot{align-self:flex-start;display:flex;gap:10px;max-width:92%}
   .avatar{flex:none;width:28px;height:28px;border-radius:7px;background:var(--accent);color:#fff;
-    display:grid;place-items:center;font-weight:700;font-size:12px}
+    display:grid;place-items:center;font-weight:700;font-size:12px;overflow:hidden}
+  .avatar img{width:100%;height:100%;display:block}
   .bubble{background:var(--panel);border:1px solid var(--line);border-radius:4px 14px 14px 14px;padding:10px 14px;min-width:120px}
   .bubble .text{white-space:pre-wrap;word-wrap:break-word}
   .bubble .think{color:var(--muted);font-size:13.5px;border-left:2px solid var(--line);padding-left:10px;margin-bottom:8px;white-space:pre-wrap}
@@ -114,6 +115,17 @@
   .shot{align-self:flex-start;max-width:min(100%,560px);border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .shot img{display:block;width:100%}
   #agBudget{vertical-align:middle;width:130px}
+  .note.ok{color:var(--ok);font-weight:700}
+  .goalbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 10px;border:1px solid var(--accent);border-radius:10px;font-size:13px}
+  .goalbar #agGoalText{flex:1;min-width:180px;word-break:break-word}
+  .goalbar #agGoalState{font-weight:700}
+  .cmdhint{border:1px solid var(--line);border-radius:10px;background:var(--panel);margin:2px 0 6px;max-height:240px;overflow:auto;font-size:13px}
+  .cmdhint div{padding:6px 10px;cursor:pointer;display:flex;gap:12px}
+  .cmdhint div.on,.cmdhint div:hover{background:var(--bg)}
+  .cmdhint b,.cmdcard b{min-width:110px;white-space:nowrap}
+  .cmdcard{align-self:stretch;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 14px;font-size:13px}
+  .cmdcard .row{display:flex;gap:12px;padding:3px 0;word-break:break-word}
+  .cmdcard button{margin-top:8px;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 18px;font:inherit;font-weight:700;cursor:pointer}
   @media (max-width: 600px){
     header{padding:9px 12px} header h1{font-size:16px}
     .usage .meter{width:100px} .usage{font-size:11.5px}
@@ -125,7 +137,7 @@
 </head>
 <body>
 <header>
-  <h1><span>DeepSeek</span> Agent
+  <h1><span>Baleen</span>Code
     <span class="tabs"><button id="tabChat" class="on">Chat</button><button id="tabAgent">Agent</button></span>
     <button class="link" id="newChat" title="Start a new conversation">New chat</button>
     <button class="link" id="keyBtn" title="Set your API key">API key</button>
@@ -173,7 +185,12 @@
       <input type="text" id="agRoot" placeholder="Folder path (or use Choose folder)" spellcheck="false" autocomplete="off">
     </div>
     <div class="line">
-      <label class="hint" id="agAutoLabel"><input type="checkbox" id="agAuto"> Auto-approve actions (not recommended)</label>
+      <label class="hint" id="agLevelLabel" title="How often the assistant asks before it acts">Approval
+        <select id="agLevel">
+          <option value="ask">Ask every time</option>
+          <option value="edits">Auto-accept edits</option>
+          <option value="auto">Autonomous (asks only for risky actions)</option>
+        </select></label>
       <label class="hint" title="The assistant stops when one request has cost this much">Max cost per request
         <input type="range" id="agBudget" min="0.1" max="5" step="0.1" value="0.3"> <b id="agBudgetVal">$0.30</b></label>
       <button class="link" id="agNew">New session</button>
@@ -185,6 +202,13 @@
       <span class="hint" id="agA11yState"></span>
     </div>
     <div class="modehelp" id="agHelp"></div>
+    <div class="modehelp" id="agLevelHelp"></div>
+    <div class="goalbar" id="agGoalBar" hidden>
+      <span id="agGoalText"></span><span id="agGoalState"></span><span class="hint" id="agGoalCost"></span>
+      <button class="link" id="agGoalPause">Pause</button>
+      <button class="link" id="agGoalResume">Resume</button>
+      <button class="link" id="agGoalClear">Clear goal</button>
+    </div>
   </div></div>
   <div id="agLog"><div class="log" id="agItems"></div></div>
   <footer>
@@ -193,9 +217,11 @@
         <label class="filebtn">Attach file<input type="file" id="agFile" accept=".txt,.md,.csv,.tsv,.json,.log,.xml,.html,.htm,.srt,.vtt,.py,.js,.css,.pdf,.docx,.png,.jpg,.jpeg,.bmp,.tif,.tiff,.webp,text/*,application/pdf,image/*" hidden></label>
         <span class="fileinfo" id="agFileInfo"></span>
       </div>
-      <textarea id="agPrompt" rows="3" placeholder="What should the assistant do? (Enter to send, Shift+Enter for a new line)"></textarea>
+      <div class="cmdhint" id="agCmdHint" hidden></div>
+      <textarea id="agPrompt" rows="3" placeholder="What should the assistant do? Type / for commands (Enter to send, Shift+Enter for a new line)"></textarea>
       <div class="line">
         <span class="hint" id="agAttachHint"></span>
+        <span class="hint" id="agStep"></span>
         <span class="hint" id="agCost"></span>
         <button id="agSend">Send</button>
         <button id="agStop" hidden>Stop</button>
@@ -651,7 +677,7 @@ function renderItem(item){
       ? `<div class="error">${esc(item.error)}</div>`
       : `${think}<div class="text">${esc(item.content)}</div>`
         + (item.done ? `<div class="meta">${providerLabel(item)}<span>${(item.usage?.outputTokens ?? 0).toLocaleString()} tokens out</span><span>cost ${costText(item.cost)}</span></div>` : '');
-    b.innerHTML = `<div class="avatar">DS</div><div class="bubble">${body}</div>`;
+    b.innerHTML = `<div class="avatar"><img src="icon.png" alt=""></div><div class="bubble">${body}</div>`;
     nodes.push(b);
   }
   return nodes;
@@ -660,7 +686,7 @@ function renderItem(item){
 function renderAll(){
   log.innerHTML = '';
   if (!history.length) {
-    log.innerHTML = `<div class="empty"><h2>Ask DeepSeek anything</h2>
+    log.innerHTML = `<div class="empty"><h2>Ask BaleenCode anything</h2>
       <div>Attach a document if you want questions answered about it.</div></div>`;
     return;
   }
@@ -796,26 +822,67 @@ $('keySave').onclick = async () => {
 
 // =================== agent mode ===================
 const AG_KEY = 'ds-agent-settings';
-const ag = { mode: 'folder', root: '', rootName: '', budget: 0.3, target: '', app: '', appName: '', apps: [] };
+const ag = { mode: 'folder', root: '', rootName: '', budget: 0.3, target: '', app: '', appName: '', apps: [], level: 'edits', goalHours: 8 };
 try { Object.assign(ag, JSON.parse(localStorage.getItem(AG_KEY) || '{}')); } catch {}
 if (!['read', 'folder', 'full', 'browser', 'screen', 'desktop', 'device'].includes(ag.mode) || (IS_APP && !['read', 'folder', 'device'].includes(ag.mode)) || (!IS_APP && ag.mode === 'device')) ag.mode = 'folder';
 if (!(ag.budget >= 0.1 && ag.budget <= 5)) ag.budget = 0.3;
 if (!Array.isArray(ag.apps)) ag.apps = ag.app ? [{ pkg: ag.app, name: ag.appName }] : [];
-let agHistory = [];          // raw model messages (including tool calls), kept for context
+if (!['ask', 'edits', 'auto'].includes(ag.level)) ag.level = 'edits';
+if (!(ag.goalHours >= 0.1 && ag.goalHours <= 24)) ag.goalHours = 8;
+// The session (raw model messages, including tool calls) and the goal survive a restart, so a goal can be resumed
+const AGH_KEY = 'ds-agent-history', GOAL_KEY = 'ds-agent-goal';
+let agHistory = [];
+try { agHistory = JSON.parse(localStorage.getItem(AGH_KEY) || '[]'); if (!Array.isArray(agHistory)) agHistory = []; } catch { agHistory = []; }
+let agGoal = null;           // { objective, hours, status: running | paused | complete | blocked, spent, startedAt }
+try { agGoal = JSON.parse(localStorage.getItem(GOAL_KEY) || 'null'); } catch {}
+if (agGoal && (typeof agGoal.objective !== 'string' || !agGoal.objective)) agGoal = null;
+if (agGoal && agGoal.status === 'running') agGoal.status = 'paused';   // the app was closed while it ran
+let agSessionSpent = 0;
+let agRunInfo = null;        // what the running request is: { goal, plan, compact }
+let agRunId = null, agSoftStopping = false;
+const agCards = {};          // approvalId -> buttons of its card
+function agSaveHistory(){
+  try {
+    const s = JSON.stringify(agHistory);
+    // Browser storage is small: a very long session is kept in memory only (/compact shrinks it)
+    if (s.length < 3000000) localStorage.setItem(AGH_KEY, s); else localStorage.removeItem(AGH_KEY);
+  } catch {}
+}
+function agSaveGoal(){
+  try { if (agGoal) localStorage.setItem(GOAL_KEY, JSON.stringify(agGoal)); else localStorage.removeItem(GOAL_KEY); } catch {}
+  agShowGoal();
+}
+const GOAL_STATE = { running: 'Running', paused: 'Paused', complete: 'Complete', blocked: 'Needs your input' };
+function agShowGoal(){
+  $('agGoalBar').hidden = !agGoal;
+  if (!agGoal) return;
+  $('agGoalText').textContent = '🎯 ' + agGoal.objective;
+  $('agGoalState').textContent = GOAL_STATE[agGoal.status] || agGoal.status;
+  $('agGoalCost').textContent = '$' + (agGoal.spent || 0).toFixed(4);
+  $('agGoalPause').hidden = agGoal.status !== 'running';
+  $('agGoalResume').hidden = agGoal.status === 'running' || agGoal.status === 'complete';
+  $('agGoalClear').hidden = agGoal.status === 'running';
+}
+const LEVEL_NAME = { ask: 'Ask every time', edits: 'Auto-accept edits', auto: 'Autonomous (asks only for risky actions)' };
+const LEVEL_HELP = {
+  ask: 'Approval: every edit, delete, command, click and typing waits for your OK.',
+  edits: 'Approval: file edits in the working folder go ahead; deletes, commands, clicks and typing ask.',
+  auto: 'Approval: the assistant works on its own and asks only before risky actions (secrets, dangerous commands, purchases, deletes or sending, password fields). Suited to /goal.',
+};
 let agController = null;
 const agTools = {};          // tool-call id -> element
 
 const MODE_HELP = {
   read: 'The assistant can look at and read files inside the chosen folder. It cannot change anything.',
-  folder: 'The assistant can read, create and edit files inside the chosen folder only. Deleting asks you first (files go to a recoverable trash folder). It cannot run commands.',
-  full: 'FULL ACCESS: the assistant can read any file you can, change files anywhere, and run PowerShell commands. Every change, delete and command asks you first. Keys, passwords and browser data always ask, even with auto-approve.',
+  folder: 'The assistant can read, create and edit files inside the chosen folder only. Deleted files go to a recoverable trash folder. It cannot run commands.',
+  full: 'FULL ACCESS: the assistant can read any file you can, change files anywhere, and run PowerShell commands. Keys, passwords, browser data and risky commands always ask, at every approval level.',
 };
 
-MODE_HELP.browser = 'Opens its own Edge window (separate profile, none of your logins) and drives it. It reads the page as text, so it is cheap and exact. Every click, typing and page change asks first; purchases, deletes and password fields always ask.';
-MODE_HELP.screen = 'Same separate browser window, but the assistant looks at screenshots (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and clicks by pixel position. Screenshots of that browser window are sent to that provider. Every action asks first; purchases, deletes and password fields always ask.';
-MODE_HELP.desktop = 'Works only on the application windows whose titles you type below (up to 5, separated by commas, for example Calculator, Notepad). The assistant sees a window\'s controls as a list and presses buttons / fills text boxes through Windows accessibility, so it cannot touch other windows. Apps that do not expose their controls cannot be operated. Every action asks first; deletes, purchases and password fields always ask.';
-MODE_HELP.device = 'Works only on the apps you choose below (up to 5), through Android accessibility: it sees an app\'s controls as a list and taps / types in them. It cannot use any other app. You must turn the accessibility service on once in Settings (Android shows its own warning). Every action asks first, unless you turn on auto-approve; deletes, purchases and password fields always ask. While the assistant works in the other app, come back here to approve (or use split screen).';
-function agSave(){ try { localStorage.setItem(AG_KEY, JSON.stringify({ mode: ag.mode, root: ag.root, rootName: ag.rootName, budget: ag.budget, target: ag.target, apps: ag.apps })); } catch {} }
+MODE_HELP.browser = 'Opens its own Edge window (separate profile, none of your logins) and drives it. It reads the page as text, so it is cheap and exact. Purchases, deletes, sending or posting, and password fields always ask.';
+MODE_HELP.screen = 'Same separate browser window, but the assistant looks at screenshots (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and clicks by pixel position. Screenshots of that browser window are sent to that provider. Purchases, deletes, sending or posting, and password fields always ask.';
+MODE_HELP.desktop = 'Works only on the application windows whose titles you type below (up to 5, separated by commas, for example Calculator, Notepad). The assistant sees a window\'s controls as a list and presses buttons / fills text boxes through Windows accessibility, so it cannot touch other windows. Apps that do not expose their controls cannot be operated. Deletes, purchases, sending and password fields always ask.';
+MODE_HELP.device = 'Works only on the apps you choose below (up to 5), through Android accessibility: it sees an app\'s controls as a list and taps / types in them. It cannot use any other app. You must turn the accessibility service on once in Settings (Android shows its own warning). Deletes, purchases, sending and password fields always ask. While the assistant works in the other app, come back here to approve (or use split screen).';
+function agSave(){ try { localStorage.setItem(AG_KEY, JSON.stringify({ mode: ag.mode, root: ag.root, rootName: ag.rootName, budget: ag.budget, target: ag.target, apps: ag.apps, level: ag.level, goalHours: ag.goalHours })); } catch {} }
 
 function agRefreshBar(){
   $('agMode').value = ag.mode;
@@ -835,11 +902,10 @@ function agRefreshBar(){
   $('agDeviceRow').hidden = !dev;
   if (dev) agDeviceRefresh();
   for (const v of ['full', 'browser', 'screen', 'desktop']) { const o = $('agMode').querySelector('option[value=' + v + ']'); o.hidden = IS_APP; o.disabled = IS_APP; }
-  $('agAutoLabel').hidden = ag.mode === 'read';
-  $('agAutoLabel').lastChild.textContent = dev ? ' Auto-approve taps and typing (not recommended)'
-    : web || desk ? ' Auto-approve clicks, typing and page changes (not recommended)'
-    : full ? ' Auto-approve changes and commands (not recommended)'
-    : ' Auto-approve deletes (not recommended)';
+  $('agLevelLabel').hidden = ag.mode === 'read';
+  $('agLevel').value = ag.level;
+  $('agLevelHelp').textContent = ag.mode === 'read' ? '' : LEVEL_HELP[ag.level];
+  $('agLevelHelp').className = 'modehelp' + (ag.level === 'auto' ? ' danger' : '');
   $('agBudget').value = ag.budget; $('agBudgetVal').textContent = '$' + ag.budget.toFixed(2);
 }
 
@@ -865,7 +931,8 @@ function agAddUser(text, file){
 function agAddBot(text){
   const b = document.createElement('div');
   b.className = 'msg bot';
-  const av = document.createElement('div'); av.className = 'avatar'; av.textContent = 'DS';
+  const av = document.createElement('div'); av.className = 'avatar';
+  const avImg = document.createElement('img'); avImg.src = 'icon.png'; avImg.alt = ''; av.append(avImg);
   const bub = document.createElement('div'); bub.className = 'bubble';
   const t = document.createElement('div'); t.className = 'text'; t.textContent = text;
   bub.append(t); b.append(av, bub);
@@ -896,13 +963,20 @@ function agShowApproval(ev, answer){
   deny.onclick = () => decide(false);
   btns.append(allow, deny, state);
   card.append(btns);
+  agCards[ev.approvalId] = { allow, deny, state };
+  if (agRunInfo?.goal && ev.expiresIn) {
+    const w = document.createElement('div'); w.className = 'hint';
+    w.textContent = `If nobody answers within ${Math.round(ev.expiresIn / 60000)} min, this is skipped (not allowed).`;
+    card.append(w);
+  }
   $('agLog').scrollTop = $('agLog').scrollHeight;
   try { window.focus(); } catch {}
 }
 
 function agOnEvent(ev, approve){
   switch (ev.type) {
-    case 'text': agAddBot(ev.text); break;
+    // The goal markers are for the app; show them as symbols
+    case 'text': agAddBot(String(ev.text).replace(/^[\s*#>_-]*GOAL COMPLETE[\s:：.!*-]*/i, '✅ ').replace(/^[\s*#>_-]*GOAL BLOCKED[\s:：.!*-]*/i, '⛔ ')); break;
     case 'image': {
       const box = document.createElement('div'); box.className = 'shot';
       const img = document.createElement('img'); img.alt = 'Screenshot the assistant is looking at';
@@ -935,13 +1009,32 @@ function agOnEvent(ev, approve){
       agShowApproval(ev, (ok) => approve(ev.approvalId, ok));
       break;
     case 'wait': agEl('note', `${ev.reason} — waiting ${ev.seconds}s and trying again…`); break;
+    case 'run': agRunId = ev.id; break;
+    case 'step': $('agStep').textContent = ev.max ? `Step ${ev.n}/${ev.max}` : `Goal · step ${ev.n} · ${agElapsed(ev.elapsed)}`; break;
+    case 'compact': agEl('note', 'The context was getting long: summarising the older steps…'); break;
+    case 'approval_expired': {
+      const c = agCards[ev.approvalId];
+      if (c) { c.allow.disabled = c.deny.disabled = true; c.state.textContent = 'No answer: skipped'; }
+      break;
+    }
     case 'usage':
       $('agCost').textContent = `This request: $${ev.spent.toFixed(4)}`;
       if (ev.provider && !allowedSlugs().includes(ev.provider)) agEl('note bad', `Served by "${ev.provider}", which is not on the approved list.`);
       break;
     case 'done':
-      agHistory = agHistory.concat(ev.messages || []);
+      agHistory = ev.replaceHistory ? (ev.messages || []) : agHistory.concat(ev.messages || []);
+      agSessionSpent += Number(ev.spent) || 0;
+      agSaveHistory();
+      if (agRunInfo?.goal && agGoal) {
+        agGoal.spent = (agGoal.spent || 0) + (Number(ev.spent) || 0);
+        agGoal.status = ev.outcome === 'complete' ? 'complete' : ev.outcome === 'blocked' ? 'blocked' : 'paused';
+        agSaveGoal();
+        if (ev.outcome === 'complete') agEl('note ok', 'Goal complete.');
+        if (ev.outcome === 'blocked') agEl('note bad', 'The goal is blocked: the assistant needs something from you. Reply with /goal resume and your instructions.');
+      }
       if (ev.stopped) agEl('note bad', ev.stopped);
+      if (agRunInfo?.compact) agEl('note', 'The conversation was replaced by a summary.');
+      if (ev.plan && !ev.stopped) agOfferPlan();
       break;
     case 'error': agEl('note bad', ev.error); break;
   }
@@ -968,32 +1061,240 @@ async function agRunWindows(body, onEvent, signal){
   }
 }
 
-async function agSend(){
-  if (agController) return;
-  const typed = $('agPrompt').value.trim();
-  const attached = agLoadedFile;
-  if (!typed && !attached) return;
-  const text = attached ? `[Attached file: ${attached.name}]\n${attached.text}\n\n${typed || 'Please summarise this file.'}` : typed;
-  if (!getKey()) { showSetup(true); return; }
-  if (['read', 'folder'].includes(ag.mode) && !ag.root.trim()) { alert('Choose a folder first.'); return; }
-  if (ag.mode === 'device' && !ag.apps.length) { alert('Choose the app(s) the assistant may use first.'); return; }
-  if (ag.mode === 'desktop' && !ag.target.trim()) { alert('Type part of the title of each window the assistant may use, separated by commas (for example: Calculator, Notepad).'); return; }
+function agElapsed(ms){
+  const m = Math.floor((ms || 0) / 60000);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`;
+}
 
-  agAddUser(typed || t(`(Please summarise ${attached.name})`), attached);
-  agLoadedFile = null; $('agFile').value = ''; showFileInfo('agent');
-  $('agPrompt').value = '';
-  $('agSend').hidden = true; $('agStop').hidden = false;
+/** Checks that the chosen mode has what it needs (folder, apps or windows) */
+function agReady(){
+  if (!getKey()) { showSetup(true); return false; }
+  if (['read', 'folder'].includes(ag.mode) && !ag.root.trim()) { alert('Choose a folder first.'); return false; }
+  if (ag.mode === 'device' && !ag.apps.length) { alert('Choose the app(s) the assistant may use first.'); return false; }
+  if (ag.mode === 'desktop' && !ag.target.trim()) { alert('Type part of the title of each window the assistant may use, separated by commas (for example: Calculator, Notepad).'); return false; }
+  return true;
+}
+
+/** Runs one request. extra: { goal } | { plan: true } | { command: 'compact' } */
+async function agRun({ text, shown, file = null, extra = {} }){
+  if (agController) return;
+  if (shown) agAddUser(shown, file);
+  $('agSend').hidden = true; $('agStop').hidden = false; $('agStep').textContent = '';
   agController = new AbortController();
+  agRunInfo = { goal: !!extra.goal, plan: !!extra.plan, compact: extra.command === 'compact' };
+  if (extra.goal && agGoal) { agGoal.status = 'running'; agSaveGoal(); }
   const body = { mode: ag.mode, root: ag.root.trim(), rootName: ag.rootName, target: ag.target.trim(), apps: ag.apps, user: text, history: agHistory,
-    autoApprove: $('agAuto').checked && ag.mode !== 'read', budgetUsd: ag.budget };
+    approval: ag.level, budgetUsd: ag.budget, ...extra };
   try {
     await (IS_APP ? agRunAndroid : agRunWindows)(body, agOnEvent, agController.signal);
   } catch (e) {
     agEl('note bad', e?.name === 'AbortError' ? 'Stopped.' : String(e?.message ?? e));
   } finally {
-    agController = null;
-    $('agSend').hidden = false; $('agStop').hidden = true;
+    if (agRunInfo.goal && agGoal && agGoal.status === 'running') { agGoal.status = 'paused'; agSaveGoal(); }
+    agController = null; agRunInfo = null; agRunId = null; agSoftStopping = false;
+    $('agSend').hidden = false; $('agStop').hidden = true; $('agStop').textContent = t('Stop');
     api.usage().then(showUsage).catch(() => {});
+  }
+}
+
+async function agSend(){
+  if (agController) return;
+  const typed = $('agPrompt').value.trim();
+  const attached = agLoadedFile;
+  if (!typed && !attached) return;
+  agHints(false);
+  if (typed.startsWith('/') && !attached) {
+    const m = typed.match(/^(\/[a-z]+)(?:\s+([\s\S]*))?$/i);
+    const cmd = m && (AG_ALIASES[m[1].toLowerCase()] || m[1].toLowerCase());
+    if (!cmd || !AG_COMMANDS.some(c => c[0] === cmd)) { agEl('note bad', `Unknown command: ${m ? m[1] : typed}. Type /help for the list.`); return; }
+    $('agPrompt').value = '';
+    await agCommand(cmd, (m[2] || '').trim());
+    return;
+  }
+  if (!agReady()) return;
+  const text = attached ? `[Attached file: ${attached.name}]\n${attached.text}\n\n${typed || 'Please summarise this file.'}` : typed;
+  agLoadedFile = null; $('agFile').value = ''; showFileInfo('agent');
+  $('agPrompt').value = '';
+  await agRun({ text, shown: typed || t(`(Please summarise ${attached.name})`), file: attached });
+}
+
+// ---------- slash commands (as in Claude Code and Codex) ----------
+const AG_COMMANDS = [
+  ['/goal', 'Keep working until a goal is reached, for hours if needed. "/goal 4h …" sets a time limit. Also: /goal pause, resume, clear'],
+  ['/plan', 'Look first and propose a plan; nothing is changed until you approve it'],
+  ['/permissions', 'Show or change the approval level: ask, edits or auto'],
+  ['/compact', 'Replace the conversation so far with a summary (saves cost and room)'],
+  ['/cost', 'Cost of this session and the free credits left'],
+  ['/status', 'Mode, folder, approval level, limits and goal'],
+  ['/clear', 'Start a new session'],
+  ['/help', 'List the commands'],
+];
+const AG_ALIASES = { '/new': '/clear', '/approvals': '/permissions', '/usage': '/cost' };
+
+function agCard(rows, title){
+  const d = agEl('cmdcard');
+  if (title) { const h = document.createElement('div'); h.className = 'row'; const b = document.createElement('b'); b.textContent = title; h.append(b); d.append(h); }
+  for (const [k, v] of rows) {
+    const r = document.createElement('div'); r.className = 'row';
+    const b = document.createElement('b'); b.textContent = k;
+    const span = document.createElement('span'); span.textContent = v;
+    r.append(b, span); d.append(r);
+  }
+  $('agLog').scrollTop = $('agLog').scrollHeight;
+  return d;
+}
+
+function agSetLevel(lv, confirmed = false){
+  if (lv === 'auto' && ag.level !== 'auto' && !confirmed && !confirm(AUTO_CONFIRM)) { $('agLevel').value = ag.level; return false; }
+  ag.level = lv; agSave(); agRefreshBar();
+  agEl('note', `Approval level: ${t(LEVEL_NAME[lv])}`);
+  return true;
+}
+const AUTO_CONFIRM = 'Autonomous: the assistant edits, deletes (to the recoverable trash), runs commands and clicks without asking each time.\n'
+  + 'It still always asks before: reading secrets (keys, passwords, .env), dangerous commands (format, shutdown, permanent deletes, git push, sending data out), purchases, deletes, sending or posting, and password fields.\n'
+  + 'The AI can be misled by what it reads (prompt injection), so use it for work you can check afterwards.\n'
+  + 'Turn Autonomous on?';
+
+async function agCommand(cmd, arg){
+  switch (cmd) {
+    case '/help':
+      agCard(AG_COMMANDS.map(([c, d]) => [c, t(d)]), t('Commands'));
+      return;
+    case '/clear': agNewSession(); return;
+    case '/cost': {
+      let left = '';
+      try { const u = await api.usage(); showUsage(u); if (u.credits) left = '$' + u.credits.balance.toFixed(4); } catch {}
+      agCard([[t('This session'), '$' + agSessionSpent.toFixed(4)], ...(agGoal ? [[t('Goal so far'), '$' + (agGoal.spent || 0).toFixed(4)]] : []),
+        [t('Free credits left'), left || t('unknown')], [t('Max cost per request'), '$' + ag.budget.toFixed(2)]], t('Cost'));
+      return;
+    }
+    case '/status': {
+      const where = ag.mode === 'desktop' ? ag.target : ag.mode === 'device' ? ag.apps.map(a => a.name).join(', ') : IS_APP ? ag.rootName : ag.root;
+      agCard([[t('Mode'), $('agMode').selectedOptions[0]?.textContent || ag.mode], [t('Working in'), where || '—'],
+        [t('Approval'), t(LEVEL_NAME[ag.level])], [t('Max cost per request'), '$' + ag.budget.toFixed(2)],
+        [t('Goal'), agGoal ? `${agGoal.objective} (${t(GOAL_STATE[agGoal.status] || agGoal.status)})` : '—'],
+        [t('Messages in context'), String(agHistory.length)]], t('Status'));
+      return;
+    }
+    case '/permissions': {
+      if (!arg) { agCard(['ask', 'edits', 'auto'].map(k => [(k === ag.level ? '▶ ' : '') + k, t(LEVEL_HELP[k])]), t('Approval levels (/permissions ask | edits | auto)')); return; }
+      const lv = { ask: 'ask', edits: 'edits', edit: 'edits', auto: 'auto', autonomous: 'auto' }[arg.toLowerCase()];
+      if (!lv) { agEl('note bad', 'Use /permissions ask, /permissions edits or /permissions auto.'); return; }
+      agSetLevel(lv);
+      return;
+    }
+    case '/compact':
+      if (!agHistory.length) { agEl('note', 'Nothing to compact yet.'); return; }
+      if (!getKey()) { showSetup(true); return; }
+      agEl('note', 'Summarising the conversation…');
+      await agRun({ text: '', extra: { command: 'compact' } });
+      return;
+    case '/plan':
+      if (!arg) { agEl('note bad', 'Write the request after /plan, for example: /plan tidy up this folder'); return; }
+      if (!agReady()) return;
+      await agRun({ text: arg, shown: '/plan ' + arg, extra: { plan: true } });
+      return;
+    case '/goal': await agGoalCommand(arg); return;
+  }
+}
+
+async function agGoalCommand(arg){
+  const word = arg.toLowerCase();
+  if (!arg || word === 'status') {
+    if (!agGoal) agEl('note', 'No goal is set. Start one with /goal followed by what should be achieved.');
+    else agCard([[t('Objective'), agGoal.objective], [t('State'), t(GOAL_STATE[agGoal.status] || agGoal.status)],
+      [t('Time limit per run'), `${agGoal.hours} h`], [t('Cost so far'), '$' + (agGoal.spent || 0).toFixed(4)]], t('Goal'));
+    return;
+  }
+  if (word === 'pause') { if (agRunInfo?.goal) agSoftStop(); else agEl('note', 'The goal is not running.'); return; }
+  if (word === 'clear') {
+    if (agRunInfo?.goal) { agEl('note bad', 'Pause the goal first.'); return; }
+    agGoal = null; agSaveGoal(); agEl('note', 'The goal was cleared.'); return;
+  }
+  if (word === 'resume' || word.startsWith('resume ')) {
+    if (!agGoal) { agEl('note bad', 'There is no goal to resume.'); return; }
+    if (!agReady()) return;
+    const more = arg.slice(6).trim();
+    await agStartGoal(more ? `Continue working toward the goal. New instructions from the user: ${more}` : 'Continue working toward the goal.', '/goal ' + arg);
+    return;
+  }
+  // A new goal, with an optional time limit first: "/goal 4h …", "/goal 30m …"
+  let hours = ag.goalHours, objective = arg;
+  const tm = arg.match(/^(\d+(?:\.\d+)?)\s*(h|m|min|時間|分)\s+([\s\S]+)$/i);
+  if (tm) { hours = /^(m|min|分)$/i.test(tm[2]) ? Number(tm[1]) / 60 : Number(tm[1]); objective = tm[3].trim(); }
+  hours = Math.min(Math.max(hours, 0.1), 24);
+  if (agGoal && agGoal.status !== 'complete' && !confirm('A goal is already set. Replace it with this one?')) return;
+  if (!agReady()) return;
+  if (ag.mode !== 'read' && ag.level !== 'auto'
+    && confirm('Goal mode works best with the "Autonomous" approval level: the assistant then stops only for risky actions.\nOtherwise each action waits for you, and is skipped after 5 minutes without an answer.\nSwitch to Autonomous?')) {
+    agSetLevel('auto', true);
+  }
+  agGoal = { objective, hours, status: 'paused', spent: 0, startedAt: Date.now() };
+  agSaveGoal();
+  await agStartGoal(`Goal: ${objective}`, '/goal ' + arg);
+}
+
+function agStartGoal(text, shown){
+  return agRun({ text, shown, extra: { goal: { objective: agGoal.objective, hours: agGoal.hours } } });
+}
+
+function agOfferPlan(){
+  const d = agCard([], t('Plan ready'));
+  const go = document.createElement('button'); go.textContent = t('Carry out this plan');
+  go.onclick = () => {
+    if (agController || !agReady()) return;
+    go.disabled = true;
+    agRun({ text: 'Carry out the plan above. Check the result when you are done.', shown: t('Carry out this plan') });
+  };
+  d.append(go);
+}
+
+/** First press: stop after the current step (the work so far is kept). Second press: stop at once. */
+function agSoftStop(){
+  if (!agController) return;
+  if (agSoftStopping) { agController.abort(); return; }
+  agSoftStopping = true;
+  $('agStop').textContent = t('Stop now');
+  agEl('note', 'Stopping after the current step… (press Stop now to stop at once)');
+  if (IS_APP) { try { window.agAndroidStop?.(); } catch {} }
+  else if (agRunId) fetch('/api/agent/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: agRunId }) }).catch(() => {});
+}
+
+function agNewSession(){
+  if (agController) return;
+  if (agGoal && agGoal.status !== 'complete' && !confirm('This also clears the current goal. Start a new session?')) return;
+  agHistory = []; agSessionSpent = 0; agSaveHistory();
+  agGoal = null; agSaveGoal();
+  $('agItems').innerHTML = ''; $('agCost').textContent = ''; $('agStep').textContent = '';
+}
+
+// Command suggestions while typing "/"
+let agHintIndex = 0;
+function agHints(show){
+  const box = $('agCmdHint');
+  const v = $('agPrompt').value;
+  const list = show && /^\/[a-z]*$/i.test(v) ? AG_COMMANDS.filter(c => c[0].startsWith(v.toLowerCase())) : [];
+  box.hidden = !list.length;
+  box.innerHTML = '';
+  agHintIndex = Math.min(agHintIndex, Math.max(list.length - 1, 0));
+  list.forEach(([c, d], i) => {
+    const row = document.createElement('div'); if (i === agHintIndex) row.className = 'on';
+    const b = document.createElement('b'); b.textContent = c;
+    const span = document.createElement('span'); span.textContent = t(d);
+    row.append(b, span);
+    row.onmousedown = (e) => { e.preventDefault(); $('agPrompt').value = c + ' '; agHints(false); $('agPrompt').focus(); };
+    box.append(row);
+  });
+  return list;
+}
+
+/** Shows the saved session again after a restart (messages only; tool details are not kept on screen) */
+function agRenderSaved(){
+  if (!agHistory.length) return;
+  agEl('note', 'Previous session restored.');
+  for (const m of agHistory) {
+    if (m.role === 'user' && typeof m.content === 'string' && !m.content.startsWith('[')) agAddUser(m.content.length > 1500 ? m.content.slice(0, 1500) + '…' : m.content);
+    else if (m.role === 'assistant' && m.content) agAddBot(String(m.content).replace(/^[\s*#>_-]*GOAL COMPLETE[\s:：.!*-]*/i, '✅ ').replace(/^[\s*#>_-]*GOAL BLOCKED[\s:：.!*-]*/i, '⛔ '));
   }
 }
 
@@ -1013,14 +1314,12 @@ $('agMode').onchange = () => {
   const m = $('agMode').value;
   if (m === 'device' && !confirm('In this mode the assistant can read the screen of the apps you choose (up to 5) and tap or type in them (through Android accessibility). What it reads is sent to the AI provider. It cannot use other apps. Switch to phone-app mode?')) { $('agMode').value = ag.mode; return; }
   if (m === 'screen' && !confirm('In this mode the assistant looks at screenshots of its own browser window. Those screenshots are sent to the vision model provider (DeepInfra, United States). Nothing outside that browser window is captured.\n\nSwitch to screen mode?')) { $('agMode').value = ag.mode; return; }
-  if (m === 'full' && !confirm('Full access lets the assistant read any file you can read and, after you approve each action, change files and run commands anywhere on this PC.\n\nFile contents it reads are sent to the approved AI providers.\n\nSwitch to Full access?')) {
+  if (m === 'full' && !confirm('Full access lets the assistant read any file you can read, and change files and run commands anywhere on this PC. How often it asks you first depends on the approval level.\n\nFile contents it reads are sent to the approved AI providers.\n\nSwitch to Full access?')) {
     $('agMode').value = ag.mode; return;
   }
-  ag.mode = m; $('agAuto').checked = false; agSave(); agRefreshBar();
+  ag.mode = m; agSave(); agRefreshBar();
 };
-$('agAuto').onchange = () => {
-  if ($('agAuto').checked && !confirm('With auto-approve the assistant will edit, delete and (in Full access) run commands without asking each time. Sensitive files and risky commands will still ask.\n\nTurn auto-approve on?')) $('agAuto').checked = false;
-};
+$('agLevel').onchange = () => agSetLevel($('agLevel').value);
 $('agRoot').onchange = () => { if (ag.mode === 'desktop') { ag.target = $('agRoot').value.trim(); agSave(); } else if (!IS_APP) { ag.root = $('agRoot').value.trim(); agSave(); } };
 $('agPick').onclick = agPick;
 function bridgeCall(fn, ...args) { return new Promise(resolve => { const id = ++bridgeSeq; bridgePending[id] = resolve; window.DSBridge[fn](id, ...args); }); }
@@ -1028,7 +1327,7 @@ async function agDeviceRefresh(){
   if (!IS_APP || typeof window.DSBridge.deviceStatus !== 'function') return;
   try {
     const st = await bridgeCall('deviceStatus');
-    $('agA11yState').textContent = st.text === 'running' ? 'Accessibility: on' : 'Accessibility: OFF (turn on "DeepSeek Agent" in Settings)';
+    $('agA11yState').textContent = st.text === 'running' ? 'Accessibility: on' : 'Accessibility: OFF (turn on "BaleenCode" in Settings)';
     const apps = JSON.parse((await bridgeCall('listApps')).text || '[]');
     const sel = $('agApp');
     sel.innerHTML = '';
@@ -1046,14 +1345,24 @@ $('agA11y').onclick = () => { if (IS_APP) window.DSBridge.openAccessibilitySetti
 document.addEventListener('visibilitychange', () => { if (!document.hidden) agDeviceRefresh(); });
 $('agBudget').oninput = () => { ag.budget = Math.round(Number($('agBudget').value) * 10) / 10; $('agBudgetVal').textContent = '$' + ag.budget.toFixed(2); agSave(); };
 $('agSend').onclick = agSend;
-$('agStop').onclick = () => agController?.abort();
+$('agStop').onclick = agSoftStop;
 $('agPrompt').addEventListener('keydown', (e) => {
+  if (!$('agCmdHint').hidden && ['ArrowDown', 'ArrowUp', 'Tab'].includes(e.key)) {
+    const list = agHints(true);
+    if (e.key === 'Tab') { e.preventDefault(); if (list[agHintIndex]) { $('agPrompt').value = list[agHintIndex][0] + ' '; agHints(false); } return; }
+    e.preventDefault();
+    agHintIndex = (agHintIndex + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length;
+    agHints(true);
+    return;
+  }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); agSend(); }
 });
-$('agNew').onclick = () => {
-  if (agController) return;
-  agHistory = []; $('agItems').innerHTML = ''; $('agCost').textContent = '';
-};
+$('agPrompt').addEventListener('input', () => { agHintIndex = 0; agHints(true); });
+$('agPrompt').addEventListener('blur', () => agHints(false));
+$('agNew').onclick = agNewSession;
+$('agGoalPause').onclick = () => agGoalCommand('pause');
+$('agGoalResume').onclick = () => { if (!agController) agGoalCommand('resume'); };
+$('agGoalClear').onclick = () => agGoalCommand('clear');
 
 function setTab(t){
   tab = t;
@@ -1066,6 +1375,8 @@ $('tabChat').onclick = () => setTab('chat');
 $('tabAgent').onclick = () => setTab('agent');
 if (IS_APP && typeof window.DSBridge.agentStep !== 'function') $('tabAgent').hidden = true;
 agRefreshBar();
+agShowGoal();
+agRenderSaved();
 
 // Draw the history again once the approved-provider list is known, so earlier replies are not mislabelled
 loadRouting().then(() => renderAll()).catch(() => {});

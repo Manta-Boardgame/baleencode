@@ -1,6 +1,6 @@
 # Security policy
 
-DeepSeek Agent lets an AI model read files, drive a browser and operate apps on your computer or phone. That makes
+BaleenCode lets an AI model read files, drive a browser and operate apps on your computer or phone. That makes
 security the main thing to get right, so this page says plainly what is protected, what is not, and how to report a problem.
 
 ## Reporting a vulnerability
@@ -35,7 +35,7 @@ Out of scope:
 
 - the AI saying something wrong, or being talked into *proposing* a harmful action — what matters is whether the code lets
   it happen without your approval (see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md));
-- consequences of turning on **auto-approve**, which exists to remove confirmations (secrets and risky commands still ask);
+- consequences of choosing the **Autonomous** approval level, which exists to remove confirmations (the always-ask list still asks);
 - an attacker who already controls your computer or phone, or who can read your user profile;
 - the security of Vercel, the model providers, Edge/Chrome, Android or Windows themselves.
 
@@ -47,7 +47,8 @@ Out of scope:
 - **Your API key is stored on the device without encryption** (browser storage on Windows, app storage on Android).
 - **What the AI reads is sent to the approved providers** (through Vercel). That includes file contents, page text and
   screenshots the assistant looks at. Choose folders, windows and apps with that in mind.
-- **Auto-approve removes the safety net** for edits, deletes, clicks and typing. It is off by default and resets on restart.
+- **The Autonomous level removes the confirmations** for edits, deletes (to the trash), commands, clicks and typing; only the always-ask
+  list remains. `/goal` runs can last hours unattended: give them a folder you can check, and set a Vercel budget.
 - **Windows "Full access" runs PowerShell as you.** Approve commands only if you understand them.
 - The Android accessibility service can read the screen of the apps you chose. Banking and other secure screens are
   usually blocked by Android itself.

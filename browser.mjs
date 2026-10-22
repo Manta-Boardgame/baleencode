@@ -13,7 +13,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const PORT = 9333;
-const DATA_DIR = path.join(process.env.LOCALAPPDATA ?? os.homedir(), 'DeepSeekChat');
+const DATA_DIR = path.join(process.env.LOCALAPPDATA ?? os.homedir(), 'BaleenCode');
 const PROFILE = path.join(DATA_DIR, 'browser-profile');
 const EXE_CANDIDATES = [
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -226,7 +226,8 @@ async function observe(ctx, lead) {
 
 // ---------- acting on the page ----------
 
-export const RISKY = /\b(buy now|purchase|pay now|checkout|place order|delete|remove account|transfer|withdraw)\b|購入|支払|決済|注文を確定|削除|送金|退会/i;
+// Buttons that spend money, delete, or reach other people: these always ask, at every approval level
+export const RISKY = /\b(buy now|purchase|pay now|checkout|place order|delete|remove account|transfer|withdraw|send( money)?|post|publish|tweet|reply|subscribe|unsubscribe|sign up|confirm order)\b|購入|支払|決済|注文|削除|送金|退会|送信|投稿|公開|返信|申し?込|解約|契約/i;
 
 async function mouseClick(p, x, y, clickCount = 1) {
   await p.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
@@ -260,7 +261,8 @@ export const BROWSER_TOOLS = {
     prepare: (a) => {
       let u; try { u = new URL(str(a.url, 'url')); } catch { throw new Error('That is not a valid web address.'); }
       if (!/^https?:$/.test(u.protocol)) throw new Error('Only http and https addresses can be opened.');
-      return { abs: [], title: `Open ${u.href}`, url: u.href };
+      // A very long query could carry data out to another site, so it always asks
+      return { abs: [], title: `Open ${u.href}`, url: u.href, dangerous: (u.search.length + u.hash.length) > 200 };
     },
     run: async (prep, ctx) => {
       const p = await getPage();

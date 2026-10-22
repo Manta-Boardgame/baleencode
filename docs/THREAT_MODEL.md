@@ -21,7 +21,7 @@ flowchart LR
     You([You]) --> App
 
     subgraph Device["Your PC or phone — trusted"]
-      App["DeepSeek Agent<br/>enforces: folder limits, approvals,<br/>provider allowlist, cost caps"]
+      App["BaleenCode<br/>enforces: folder limits, approvals,<br/>provider allowlist, cost caps"]
       Local[("Stays on the device:<br/>API key, chat history,<br/>OCR, file parsing")]
       Tools["Tools the assistant may use:<br/>chosen folder · its own browser window ·<br/>chosen windows / apps"]
       App --- Local
@@ -79,10 +79,10 @@ is used here as a checklist. Names are used rather than numbers, because seconda
 | Risk | What the app does | Residual risk |
 |---|---|---|
 | **Prompt injection** | Tool output, file text, page text and screen text are labelled as data in the system prompt; the model is told to report and ignore instructions found there. Planted instructions on a test page and in a test file were ignored and reported. | This is model behaviour, not a guarantee. The design assumes it can fail — see *Excessive agency*. |
-| **Excessive agency** | Seven modes, each with a fixed tool set (read-only mode has no write tools; commands exist only in Full access). Folder limits are resolved in code (symlinks and junctions included). Delete moves to a trash folder; overwrites are backed up. Every change, delete, command, click and typing asks first unless auto-approve is on; secrets, password fields, purchase/delete buttons and risky commands **always** ask. Desktop/phone modes touch only the windows/apps you named. | With auto-approve on, a manipulated model can edit and delete inside the allowed scope (recoverably). In Windows Full access an approved command runs as you. |
+| **Excessive agency** | Seven modes, each with a fixed tool set (read-only mode has no write tools; commands exist only in Full access). Folder limits are resolved in code (symlinks and junctions included). Delete moves to a trash folder; overwrites are backed up. Three approval levels (ask every time / auto-accept edits / autonomous); at every level secrets, password fields, purchase/delete/send buttons, long-query URLs and risky commands (formatting, permanent deletes, `git push`, process kills, data uploads) **always** ask. In `/goal` runs an unanswered approval is skipped, never granted. Desktop/phone modes touch only the windows/apps you named. | At the Autonomous level a manipulated model can edit and delete inside the allowed scope (recoverably) and, in Full access, run commands that are not on the list. A command list cannot catch every harmful command. |
 | **Sensitive information disclosure** | Keys, `.env`, browser profiles, credentials and similar paths always ask before being read. The API key never goes into the model's context. Content is not logged. | Whatever the assistant reads is sent to the providers. Files you hand it, it can read. |
 | **Supply chain** | One runtime dependency (`pdfjs-dist`, pinned), no remote code, no telemetry, page loads only its own files (Content-Security-Policy). `package-lock.json` is committed. | The Windows package bundles Node.js; the Android app bundles Google ML Kit (see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)). Models are third-party. |
-| **Unbounded consumption** | At most 30 steps and a per-request cost cap you set (0.1–5 USD); 429 retries are bounded; size limits on files (100 MB), PDF pages (1,000) and conversations. | Your Vercel budget is the real backstop — set one. |
+| **Unbounded consumption** | A per-request cost cap you set (0.1–5 USD) that also ends `/goal` runs, 30 steps outside goals, a time limit for goals (default 8 h, at most 24 h); 429 retries are bounded; size limits on files (100 MB), PDF pages (1,000) and conversations. | Your Vercel budget is the real backstop — set one. |
 | **Improper output handling** | Model text is inserted into the page as text, never as HTML; tool output is shown in `<pre>`; arguments are validated; PowerShell arguments are passed encoded. | Commands you approve are executed as written. |
 | **Hidden context exposure** | The system prompts are plain text in the source; they contain no secrets. | n/a |
 | **Misinformation** | Not addressed by code. | Check anything that matters. |
@@ -93,7 +93,7 @@ is used here as a checklist. Names are used rather than numbers, because seconda
 | Mode | Reach | Always asks | Enforced by |
 |---|---|---|---|
 | Read-only / Read & write (folder) | One folder | Secrets; deletes | Path resolution in the server (Windows); the system folder picker (Android) |
-| Full access (Windows) | Whole PC as you | Secrets, risky commands (even with auto-approve); every change unless auto-approve | Tool gating and approvals in the server |
+| Full access (Windows) | Whole PC as you | Secrets and risky commands at every level; other actions per the approval level | Tool gating and approvals in the server |
 | Browser (text / screenshots) | Its own Edge/Chrome window with a separate profile | Purchase/delete buttons, password fields | DevTools protocol on one window; separate profile |
 | Desktop apps (Windows) | Windows whose titles you typed (up to 5) | Risky buttons, password fields | UI Automation on matched windows only; stale controls are refused |
 | Phone apps (Android) | Apps you picked (up to 5) | Risky buttons, password fields | Accessibility service bound to the chosen packages; the app's own package is refused |
@@ -107,7 +107,7 @@ key travels in a header from the page and is never written to disk by the server
 ## Residual risks, in one list
 
 1. Prompt injection is mitigated, not solved; approvals are the real defence.
-2. Auto-approve and Windows Full access are powerful by design.
+2. The Autonomous level, long `/goal` runs and Windows Full access are powerful by design.
 3. The API key is stored unencrypted on the device.
 4. Everything the assistant reads goes to the providers.
 5. A program already running as you can talk to the local server.

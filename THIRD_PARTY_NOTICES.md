@@ -1,6 +1,6 @@
 # Third-party notices
 
-DeepSeek Agent is built on, bundles, or calls the following. Each remains under its own licence or terms. This list is
+BaleenCode is built on, bundles, or calls the following. Each remains under its own licence or terms. This list is
 meant to be accurate rather than legal advice; check the linked sources for the authoritative text.
 
 ## Code that ends up in the app

@@ -3,12 +3,12 @@ plugins {
 }
 
 android {
-    namespace 'com.deepseek.chat'
+    namespace 'io.github.mantaboardgame.baleencode'
     compileSdk 36
 
     defaultConfig {
         // Must differ from the official DeepSeek app (com.deepseek.chat), otherwise Android treats this as an update of that app and refuses it
-        applicationId "app.gatewaychat.deepseek"
+        applicationId "io.github.mantaboardgame.baleencode"
         minSdk 24
         targetSdk 36
         versionCode 1
