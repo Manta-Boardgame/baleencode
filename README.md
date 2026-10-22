@@ -32,8 +32,8 @@ Get the latest build from **[Releases](https://github.com/Manta-Boardgame/baleen
 
 | Platform | File | How |
 |---|---|---|
-| Windows 10 / 11 | `BaleenCode-<version>-windows.zip` | Unzip, double-click **`BaleenCode.bat`**. Node.js is included. The first launch may show a SmartScreen warning (*More info → Run anyway*): the package is not code-signed. |
-| Android 7+ | `BaleenCode-<version>-arm64.apk` | For phones from about 2017 on. Use `…-universal.apk` if it will not install. Allow "install unknown apps" for your browser or file manager. |
+| Windows 10 / 11 | `BaleenCode-<version>-windows.zip` (37 MB; about 100 MB unzipped) | Unzip, double-click **`BaleenCode.bat`**. Node.js is included. The first launch may show a SmartScreen warning (*More info → Run anyway*): the package is not code-signed. |
+| Android 7+ | `BaleenCode-<version>-arm64.apk` (18 MB) | For phones from about 2017 on. Use `…-universal.apk` (47 MB) if it will not install. Allow "install unknown apps" for your browser or file manager. |
 
 Check what you downloaded: `SHA256SUMS.txt` lists the hashes, and the APKs are signed with this project's key
 (certificate SHA-256 `89:65:2C:2E:AB:62:14:5F:F6:B7:CA:B7:D1:D3:59:71:39:E6:77:41:C9:1D:05:A1:29:17:18:ED:28:0B:64:3B`,
@@ -297,10 +297,14 @@ solved) are in [SECURITY.md](SECURITY.md) and [docs/THREAT_MODEL.md](docs/THREAT
 
 ## App size
 
-| | Size |
-|---|---|
-| Windows: after `npm install` | about 40 MB (plus Node.js, about 100 MB, if not installed yet) |
-| Android: APK | about 47 MB for all CPU types, about 18 MB with `-Parm64Only` (most of it is the on-device text-recognition model) |
+| | Download | On the device |
+|---|---|---|
+| Windows (Releases zip, Node.js included) | 37 MB | about 100 MB unzipped (Node.js is about 90 MB of it) |
+| Windows from source (`npm install`) | — | about 40 MB, plus Node.js if not installed yet |
+| Android, arm64 APK (most phones) | 18 MB | most of it is the on-device text-recognition model |
+| Android, universal APK (any CPU) | 47 MB | |
+
+The app keeps its trash, backups and the browser profile for the browser modes in `%LOCALAPPDATA%\BaleenCode` (Windows); these grow with use.
 
 ## Privacy
 
