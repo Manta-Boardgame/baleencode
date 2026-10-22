@@ -166,6 +166,7 @@
       <span class="hint" id="keyMsg"></span>
     </div>
     <p class="hint">Your key is stored only on this device and is sent only to Vercel.</p>
+    <p class="hint">BaleenCode is provided as-is, without warranty. The AI can make mistakes: check its work and keep backups of anything important.</p>
   </div>
 </section>
 
@@ -867,7 +868,7 @@ const LEVEL_NAME = { ask: 'Ask every time', edits: 'Auto-accept edits', auto: 'A
 const LEVEL_HELP = {
   ask: 'Approval: every edit, delete, command, click and typing waits for your OK.',
   edits: 'Approval: file edits in the working folder go ahead; deletes, commands, clicks and typing ask.',
-  auto: 'Approval: the assistant works on its own and asks only before risky actions (secrets, dangerous commands, purchases, deletes or sending, password fields). Suited to /goal.',
+  auto: 'Approval: the assistant works on its own and asks only before risky actions it recognises (secrets, dangerous commands, purchases, deletes or sending, password fields). This is a safeguard, not a guarantee. Suited to /goal.',
 };
 let agController = null;
 const agTools = {};          // tool-call id -> element
@@ -875,13 +876,13 @@ const agTools = {};          // tool-call id -> element
 const MODE_HELP = {
   read: 'The assistant can look at and read files inside the chosen folder. It cannot change anything.',
   folder: 'The assistant can read, create and edit files inside the chosen folder only. Deleted files go to a recoverable trash folder. It cannot run commands.',
-  full: 'FULL ACCESS: the assistant can read any file you can, change files anywhere, and run PowerShell commands. Keys, passwords, browser data and risky commands always ask, at every approval level.',
+  full: 'FULL ACCESS: the assistant can read any file you can, change files anywhere, and run PowerShell commands. Keys, passwords, browser data and risky commands ask first at every approval level (recognised from known patterns, not a guarantee).',
 };
 
-MODE_HELP.browser = 'Opens its own Edge window (separate profile, none of your logins) and drives it. It reads the page as text, so it is cheap and exact. Purchases, deletes, sending or posting, and password fields always ask.';
-MODE_HELP.screen = 'Same separate browser window, but the assistant looks at screenshots (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and clicks by pixel position. Screenshots of that browser window are sent to that provider. Purchases, deletes, sending or posting, and password fields always ask.';
-MODE_HELP.desktop = 'Works only on the application windows whose titles you type below (up to 5, separated by commas, for example Calculator, Notepad). The assistant sees a window\'s controls as a list and presses buttons / fills text boxes through Windows accessibility, so it cannot touch other windows. Apps that do not expose their controls cannot be operated. Deletes, purchases, sending and password fields always ask.';
-MODE_HELP.device = 'Works only on the apps you choose below (up to 5), through Android accessibility: it sees an app\'s controls as a list and taps / types in them. It cannot use any other app. You must turn the accessibility service on once in Settings (Android shows its own warning). Deletes, purchases, sending and password fields always ask. While the assistant works in the other app, come back here to approve (or use split screen).';
+MODE_HELP.browser = 'Opens its own Edge window (separate profile, none of your logins) and drives it. It reads the page as text, so it is cheap and exact. Purchases, deletes, sending or posting, and password fields ask first.';
+MODE_HELP.screen = 'Same separate browser window, but the assistant looks at screenshots (a vision model: Xiaomi MiMo-V2.6-Flash via DeepInfra, US) and clicks by pixel position. Screenshots of that browser window are sent to that provider. Purchases, deletes, sending or posting, and password fields ask first.';
+MODE_HELP.desktop = 'Works only on the application windows whose titles you type below (up to 5, separated by commas, for example Calculator, Notepad). The assistant sees a window\'s controls as a list and presses buttons / fills text boxes through Windows accessibility, so it cannot touch other windows. Apps that do not expose their controls cannot be operated. Deletes, purchases, sending and password fields ask first.';
+MODE_HELP.device = 'Works only on the apps you choose below (up to 5), through Android accessibility: it sees an app\'s controls as a list and taps / types in them. It cannot use any other app. You must turn the accessibility service on once in Settings (Android shows its own warning). Deletes, purchases, sending and password fields ask first. While the assistant works in the other app, come back here to approve (or use split screen).';
 function agSave(){ try { localStorage.setItem(AG_KEY, JSON.stringify({ mode: ag.mode, root: ag.root, rootName: ag.rootName, budget: ag.budget, target: ag.target, apps: ag.apps, level: ag.level, goalHours: ag.goalHours })); } catch {} }
 
 function agRefreshBar(){
@@ -1151,8 +1152,9 @@ function agSetLevel(lv, confirmed = false){
   return true;
 }
 const AUTO_CONFIRM = 'Autonomous: the assistant edits, deletes (to the recoverable trash), runs commands and clicks without asking each time.\n'
-  + 'It still always asks before: reading secrets (keys, passwords, .env), dangerous commands (format, shutdown, permanent deletes, git push, sending data out), purchases, deletes, sending or posting, and password fields.\n'
-  + 'The AI can be misled by what it reads (prompt injection), so use it for work you can check afterwards.\n'
+  + 'It still asks first before what it recognises as risky: reading secrets (keys, passwords, .env), dangerous commands (format, shutdown, permanent deletes, git push, sending data out), purchases, deletes, sending or posting, and password fields.\n'
+  + 'Risky actions are recognised from lists of known patterns, so this is a safeguard, not a guarantee.\n'
+  + 'The AI can be misled by what it reads (prompt injection) and can make mistakes. Use it for work you can check afterwards, and keep backups.\n'
   + 'Turn Autonomous on?';
 
 async function agCommand(cmd, arg){

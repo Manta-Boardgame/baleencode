@@ -24,7 +24,7 @@ In scope — the **code-enforced limits** (they must hold even if the AI is fool
 
 - escaping the chosen folder (`..`, absolute paths, symlinks/junctions, alternate data streams);
 - performing a write, delete, command, click or typing without the approval the mode requires, or bypassing the
-  "always ask" cases (secrets, passwords, risky commands, purchase/delete buttons);
+  "ask first" cases (secrets, passwords, risky commands, purchase/delete buttons) when they are recognised;
 - reaching a provider outside the allowlist, or the allowlist being widened by anything other than editing the source;
 - operating a window or app that the user did not choose (Windows UI Automation mode, Android accessibility mode);
 - leaking the API key, or reading it from another site / another local program through this app's own server;
@@ -35,7 +35,7 @@ Out of scope:
 
 - the AI saying something wrong, or being talked into *proposing* a harmful action — what matters is whether the code lets
   it happen without your approval (see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md));
-- consequences of choosing the **Autonomous** approval level, which exists to remove confirmations (the always-ask list still asks);
+- consequences of choosing the **Autonomous** approval level, which exists to remove confirmations (the ask-first list still asks);
 - an attacker who already controls your computer or phone, or who can read your user profile;
 - the security of Vercel, the model providers, Edge/Chrome, Android or Windows themselves.
 
@@ -47,7 +47,7 @@ Out of scope:
 - **Your API key is stored on the device without encryption** (browser storage on Windows, app storage on Android).
 - **What the AI reads is sent to the approved providers** (through Vercel). That includes file contents, page text and
   screenshots the assistant looks at. Choose folders, windows and apps with that in mind.
-- **The Autonomous level removes the confirmations** for edits, deletes (to the trash), commands, clicks and typing; only the always-ask
+- **The Autonomous level removes the confirmations** for edits, deletes (to the trash), commands, clicks and typing; only the ask-first
   list remains. `/goal` runs can last hours unattended: give them a folder you can check, and set a Vercel budget.
 - **Windows "Full access" runs PowerShell as you.** Approve commands only if you understand them.
 - The Android accessibility service can read the screen of the apps you chose. Banking and other secure screens are

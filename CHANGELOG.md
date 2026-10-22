@@ -2,6 +2,13 @@
 
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-22
+
+### Changed
+- Safety wording: risky actions "ask first" instead of "always ask". They are recognised from lists of known patterns,
+  which is a safeguard, not a guarantee; the app, README and security notes now say so.
+- A no-warranty notice in the app (API key screen) and in the Autonomous confirmation; a Disclaimer section in the README.
+
 ## [1.0.0] - 2026-10-22
 
 First public release.

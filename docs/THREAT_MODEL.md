@@ -90,7 +90,7 @@ is used here as a checklist. Names are used rather than numbers, because seconda
 
 ## Controls by mode
 
-| Mode | Reach | Always asks | Enforced by |
+| Mode | Reach | Asks first (when recognised) | Enforced by |
 |---|---|---|---|
 | Read-only / Read & write (folder) | One folder | Secrets; deletes | Path resolution in the server (Windows); the system folder picker (Android) |
 | Full access (Windows) | Whole PC as you | Secrets and risky commands at every level; other actions per the approval level | Tool gating and approvals in the server |
