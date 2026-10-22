@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # Vendored into the Android app and pinned on purpose; upgrade by hand and check both PDF readers
+      - dependency-name: pdfjs-dist
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
