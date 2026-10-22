@@ -269,7 +269,7 @@ Manual runs with a real model are listed with their results and cost in [docs/TE
 
 ## License
 
-[MIT](LICENSE) © 2026 Manta-Boardgame. You may use, copy, modify, merge, publish, distribute, sublicense and sell it,
+[MIT](LICENSE) © 2026 Raiki Takahashi (Manta-Boardgame). You may use, copy, modify, merge, publish, distribute, sublicense and sell it,
 as long as the copyright notice and the licence text are kept in all copies or substantial portions — that is how a fork
 or redistribution shows where it came from. It comes with no warranty. If you build something on it, a link back to this
 repository is appreciated. Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
